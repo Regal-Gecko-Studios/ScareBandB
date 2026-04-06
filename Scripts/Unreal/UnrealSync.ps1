@@ -414,7 +414,7 @@ function Resolve-EngineRootForBuild([string]$workspacePathOverride, [string]$upr
   $attemptText = $attemptLines -join "`n"
 
   throw @"
-Could not resolve Unreal Engine install path for BUILD/RunUBT fallback.
+Could not resolve Unreal Engine install path for project-file fallback.
 
 Attempted sources (in order):
 $attemptText
@@ -576,7 +576,7 @@ function Invoke-Regenerate-ProjectFiles(
 ) {
   $uvs = Get-UVSPathFromRegistry
   if (-not $uvs) {
-    Warn "UVS not found via registry; using RunUBT fallback..."
+    Warn "UVS not found via registry; using batch-file project-file fallback..."
   }
   else {
     $uvsArgs = @("/projectfiles", $uprojectPath)
@@ -627,7 +627,7 @@ function Invoke-Regenerate-ProjectFiles(
       }
     }
 
-    Warn "UVS failed (exit $uvsExitCode) after $maxAttempts attempt(s). Falling back to RunUBT..."
+    Warn "UVS failed (exit $uvsExitCode) after $maxAttempts attempt(s). Falling back to batch-file project generation..."
   }
 
   if (-not $engineRootForFallback) {
@@ -664,13 +664,13 @@ $($candidateText -join "`n")
     $fallbackArgs += "-dotnet"
   }
 
-  Warn "Regenerating project files (RunUBT fallback via $($fallbackTool.Name))..."
+  Warn "Regenerating project files (fallback via $($fallbackTool.Name))..."
   Info "Fallback tool: $($fallbackTool.Path)"
   Info "Fallback args: $($fallbackArgs -join ' ')"
   & $fallbackTool.Path @fallbackArgs | Out-Host
 
   if ($LASTEXITCODE -ne 0) {
-    throw "RunUBT projectfiles failed (exit $LASTEXITCODE). See log: $regenLog"
+    throw "Project-file fallback failed via $($fallbackTool.Name) (exit $LASTEXITCODE). See log: $regenLog"
   }
 
   Success "Fallback project-file regeneration succeeded."

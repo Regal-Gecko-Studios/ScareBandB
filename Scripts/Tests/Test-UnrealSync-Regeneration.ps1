@@ -116,6 +116,11 @@ function Write-TextFileLf {
   [System.IO.File]::WriteAllText($Path, $normalized, $utf8NoBom)
 }
 
+function Remove-AnsiEscapeSequences([string]$Text) {
+  if ($null -eq $Text) { return "" }
+  return ([regex]::Replace($Text, "`e\[[0-9;?]*[ -/]*[@-~]", ""))
+}
+
 function New-CaseDir([string]$CaseName) {
   $dir = Join-Path $script:TempRoot $CaseName
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
@@ -266,8 +271,10 @@ exit $LASTEXITCODE
     }
   }
 
+  $normalizedOutput = @()
   foreach ($line in $out) {
-    $text = "$line"
+    $text = Remove-AnsiEscapeSequences "$line"
+    $normalizedOutput += $text
     if (-not [string]::IsNullOrWhiteSpace($text)) {
       Write-Log ("   " + $text.TrimEnd()) DarkGray
     }
@@ -275,7 +282,7 @@ exit $LASTEXITCODE
 
   return [pscustomobject]@{
     Code   = $code
-    Output = ($out | ForEach-Object { "$_" }) -join "`n"
+    Output = ($normalizedOutput | ForEach-Object { "$_" }) -join "`n"
   }
 }
 
@@ -307,7 +314,7 @@ try {
 
   Assert-Code "case 1 exit code" $res.Code 0
   Assert-OutputContains "case 1 UVS success message" $res.Output "UVS project-file regeneration succeeded."
-  Assert-OutputNotContains "case 1 no fallback invocation" $res.Output "RunUBT fallback via"
+  Assert-OutputNotContains "case 1 no fallback invocation" $res.Output "Regenerating project files (fallback via"
   Assert-Condition "case 1 UVS capture exists" (Test-Path -LiteralPath $uvsCapture1) "uvs capture created" "uvs capture missing"
   if (Test-Path -LiteralPath $uvsCapture1) {
     $capture = Get-Content -LiteralPath $uvsCapture1 -Raw
@@ -338,8 +345,8 @@ try {
   }
 
   Assert-Code "case 2 exit code" $res.Code 0
-  Assert-OutputContains "case 2 UVS failure logged" $res.Output "UVS failed (exit 17) after 2 attempt(s). Falling back to RunUBT..."
-  Assert-OutputContains "case 2 fallback tool logged" $res.Output "RunUBT fallback via Build.bat"
+  Assert-OutputContains "case 2 UVS failure logged" $res.Output "UVS failed (exit 17) after 2 attempt(s). Falling back to batch-file project generation..."
+  Assert-OutputContains "case 2 fallback tool logged" $res.Output "Regenerating project files (fallback via Build.bat)..."
   Assert-OutputContains "case 2 engine root source logged" $res.Output "Engine root resolved from UE_ENGINE_DIR"
   Assert-Condition "case 2 fallback capture exists" (Test-Path -LiteralPath $fallbackCapture2) "fallback capture created" "fallback capture missing"
   if (Test-Path -LiteralPath $fallbackCapture2) {
@@ -349,7 +356,7 @@ try {
     Assert-OutputContains "case 2 fallback args include spaced project path" $capture "-project=$uproject2"
   }
 
-  Step "Case 3: Unresolved engine root emits actionable error"
+  Step "Case 3: Expected unresolved engine-root failure is actionable"
   $case3 = New-CaseDir "case 3 unresolved engine root"
   [void](New-UProjectFile $case3 "9.9-test-missing")
   $tools3 = Join-Path $case3 "Fake Tools"
@@ -368,8 +375,9 @@ try {
     UE_ENGINE_DISABLE_COMMON_INSTALL_SCAN = "1"
   }
 
+  Write-Log "   note: the non-zero exception output above is expected for this negative test case." DarkGray
   Assert-Condition "case 3 exit is non-zero" ($res.Code -ne 0) "exit=$($res.Code)" "expected non-zero exit, got $($res.Code)"
-  Assert-OutputContains "case 3 actionable error header" $res.Output "Could not resolve Unreal Engine install path for BUILD/RunUBT fallback."
+  Assert-OutputContains "case 3 actionable error header" $res.Output "Could not resolve Unreal Engine install path for project-file fallback."
   Assert-OutputContains "case 3 attempted sources heading" $res.Output "Attempted sources (in order):"
   Assert-OutputContains "case 3 env source listed" $res.Output "UE_ENGINE_DIR is unset"
   Assert-OutputContains "case 3 association listed" $res.Output ".uproject EngineAssociation='9.9-test-missing'"
@@ -412,7 +420,7 @@ try {
 
   Assert-Code "case 4 exit code" $res.Code 0
   Assert-OutputContains "case 4 workspace resolution log" $res.Output "Engine root resolved from workspace: $engine4"
-  Assert-OutputContains "case 4 fallback tool log" $res.Output "RunUBT fallback via Build.bat"
+  Assert-OutputContains "case 4 fallback tool log" $res.Output "Regenerating project files (fallback via Build.bat)..."
   Assert-Condition "case 4 fallback capture exists" (Test-Path -LiteralPath $fallbackCapture4) "fallback capture created" "fallback capture missing"
   if (Test-Path -LiteralPath $fallbackCapture4) {
     $capture = Get-Content -LiteralPath $fallbackCapture4 -Raw
@@ -445,7 +453,7 @@ try {
   Assert-Code "case 5 exit code" $res.Code 0
   Assert-OutputContains "case 5 retry warning" $res.Output "UVS returned non-zero exit (42) on attempt 1/2. Retrying..."
   Assert-OutputContains "case 5 strict success message" $res.Output "UVS project-file regeneration succeeded."
-  Assert-OutputNotContains "case 5 no fallback invocation" $res.Output "RunUBT fallback via"
+  Assert-OutputNotContains "case 5 no fallback invocation" $res.Output "Regenerating project files (fallback via"
   Assert-Condition "case 5 fallback capture absent" (-not (Test-Path -LiteralPath $fallbackCapture5)) "fallback not called" "fallback should not have been invoked"
   if (Test-Path -LiteralPath $uvsCapture5) {
     $capture = Get-Content -LiteralPath $uvsCapture5
@@ -474,9 +482,9 @@ try {
   } -SeedLastExitCode $staleSeedCode
 
   Assert-Code "case 6 exit code" $res.Code 0
-  Assert-OutputContains "case 6 UVS failure uses UVS exit code" $res.Output "UVS failed (exit 29) after 2 attempt(s). Falling back to RunUBT..."
+  Assert-OutputContains "case 6 UVS failure uses UVS exit code" $res.Output "UVS failed (exit 29) after 2 attempt(s). Falling back to batch-file project generation..."
   Assert-OutputNotContains "case 6 stale seeded code not reported as UVS exit" $res.Output "UVS failed (exit $staleSeedCode)"
-  Assert-OutputContains "case 6 fallback still invoked" $res.Output "RunUBT fallback via Build.bat"
+  Assert-OutputContains "case 6 fallback still invoked" $res.Output "Regenerating project files (fallback via Build.bat)..."
   Assert-Condition "case 6 fallback capture exists" (Test-Path -LiteralPath $fallbackCapture6) "fallback capture created" "fallback capture missing"
 
   Step "Summary"
