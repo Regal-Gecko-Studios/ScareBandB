@@ -1,0 +1,140 @@
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 5rem 1.5rem 4rem;
+  background:
+    radial-gradient(circle at top left, rgba(198, 122, 68, 0.22), transparent 38%),
+    radial-gradient(circle at top right, rgba(50, 102, 94, 0.3), transparent 42%),
+    linear-gradient(180deg, rgba(18, 31, 30, 0.94), rgba(28, 47, 44, 0.94));
+  color: #f7efe1;
+}
+
+.heroBackdrop {
+  position: relative;
+  inset: 0;
+}
+
+.heroBody {
+  position: relative;
+  z-index: 1;
+  max-width: 58rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.eyebrow {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #f0c8a5;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(3rem, 7vw, 5.5rem);
+  line-height: 0.95;
+}
+
+.subtitle {
+  max-width: 42rem;
+  margin: 1.5rem auto 0;
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: rgba(247, 239, 225, 0.9);
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
+  flex-wrap: wrap;
+}
+
+.section {
+  padding: 3rem 1.5rem;
+}
+
+.sectionHeader {
+  max-width: 48rem;
+  margin: 0 auto 1.5rem;
+  text-align: center;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+.card {
+  display: block;
+  padding: 1.5rem;
+  border: 1px solid rgba(44, 76, 71, 0.14);
+  border-radius: 1.25rem;
+  background: linear-gradient(180deg, rgba(255, 251, 245, 0.96), #f7efe1);
+  box-shadow: 0 18px 36px rgba(30, 38, 37, 0.08);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(187, 109, 58, 0.35);
+  box-shadow: 0 24px 44px rgba(30, 38, 37, 0.12);
+}
+
+.card h3 {
+  margin-bottom: 0.75rem;
+}
+
+.card p {
+  margin: 0;
+  color: #405252;
+  line-height: 1.65;
+}
+
+.panel {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1.75rem;
+  border-radius: 1.5rem;
+  background: linear-gradient(135deg, rgba(44, 76, 71, 0.94), rgba(64, 45, 32, 0.94));
+  color: #f8f0e4;
+  box-shadow: 0 22px 40px rgba(20, 29, 28, 0.16);
+}
+
+.panel h2 {
+  margin-top: 0;
+}
+
+.panelList {
+  margin: 1rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.panelList li + li {
+  margin-top: 0.55rem;
+}
+
+@media screen and (max-width: 996px) {
+  .hero {
+    padding-top: 4rem;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .subtitle {
+    font-size: 1rem;
+  }
+}

@@ -1,0 +1,67 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --ifm-color-primary: #32665e;
+  --ifm-color-primary-dark: #2d5c55;
+  --ifm-color-primary-darker: #2a5750;
+  --ifm-color-primary-darkest: #234841;
+  --ifm-color-primary-light: #377067;
+  --ifm-color-primary-lighter: #3a756b;
+  --ifm-color-primary-lightest: #44867b;
+  --ifm-color-secondary: #e7d8bf;
+  --ifm-background-color: #f4ecdf;
+  --ifm-background-surface-color: #fff9f0;
+  --ifm-navbar-background-color: rgba(255, 248, 240, 0.88);
+  --ifm-font-family-base: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  --ifm-heading-font-family: 'Fraunces', Georgia, serif;
+  --ifm-code-font-size: 95%;
+  --ifm-link-color: #8d4d26;
+  --docusaurus-highlighted-code-line-bg: rgba(50, 102, 94, 0.08);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #7db4aa;
+  --ifm-color-primary-dark: #6daaa0;
+  --ifm-color-primary-darker: #62a59a;
+  --ifm-color-primary-darkest: #4a8d83;
+  --ifm-color-primary-light: #8dbeb5;
+  --ifm-color-primary-lighter: #98c3bb;
+  --ifm-color-primary-lightest: #b1d1ca;
+  --ifm-background-color: #14201f;
+  --ifm-background-surface-color: #1d2d2b;
+  --ifm-navbar-background-color: rgba(20, 32, 31, 0.92);
+  --ifm-link-color: #f0c8a5;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background:
+    radial-gradient(circle at top, rgba(195, 129, 81, 0.14), transparent 26%),
+    linear-gradient(180deg, #f7f1e7, #f4ecdf 32rem);
+}
+
+[data-theme='dark'] body {
+  background:
+    radial-gradient(circle at top, rgba(195, 129, 81, 0.18), transparent 26%),
+    linear-gradient(180deg, #14201f, #111918 34rem);
+}
+
+.navbar {
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(72, 92, 88, 0.1);
+}
+
+.footer {
+  background: linear-gradient(180deg, #22302e, #18211f);
+}
+
+.theme-doc-markdown > h1,
+.theme-doc-markdown > h2,
+.theme-doc-markdown > h3,
+.theme-doc-markdown > h4 {
+  letter-spacing: -0.02em;
+}
