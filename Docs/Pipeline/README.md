@@ -35,6 +35,7 @@ Only start work when the output is clean or intentionally understood.
 
 - Move `.uasset` and `.umap` files in Unreal Editor, not with filesystem tools.
 - Keep docs updates in the same branch as workflow or policy changes.
+- Start fresh Codex sessions with `codex-prompt` or `codex-tools prompt` when you want the repo docs and local context called out consistently.
 - Use `git ours`, `git theirs`, and `git conflicts` for guarded binary conflict handling.
 - Run the relevant script tests before changing hook or automation behavior.
 - Preview docs locally in Docusaurus when editing navigation or structure-heavy pages.

@@ -58,6 +58,15 @@ function Get-ProjectTestManifest {
       -ResultDirectory "Scripts/Tests/Test-UESyncShellAliasesResults")
 
     (New-TestManifestEntry `
+      -Id "codex-startup-prompt" `
+      -Name "Codex Startup Prompt" `
+      -Path "Scripts/Tests/Test-CodexStartupPrompt.ps1" `
+      -Category "codex" `
+      -Description "Validates the Codex startup prompt builder output and local private-context handling." `
+      -SupportsFailFast $true `
+      -ResultDirectory "Scripts/Tests/Test-CodexStartupPromptResults")
+
+    (New-TestManifestEntry `
       -Id "ue-sync-regeneration" `
       -Name "UE Sync Regeneration" `
       -Path "Scripts/Tests/Test-UnrealSync-Regeneration.ps1" `

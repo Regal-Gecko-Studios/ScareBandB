@@ -4,6 +4,7 @@ This folder contains automation that keeps Git/LFS/Unreal workflows consistent f
 
 ## Folder Responsibilities
 
+- `Scripts/Codex/`: Codex session helpers and prompt-building utilities.
 - `Scripts/git-hooks/`: shared hook utilities and setup scripts.
 - `Scripts/git-tools/`: conflict helper commands (`git ours`, `git theirs`, `git conflicts`).
 - `Scripts/Unreal/`: Unreal sync/build helper scripts and ArtSource scaffolding tools.
@@ -11,6 +12,7 @@ This folder contains automation that keeps Git/LFS/Unreal workflows consistent f
 
 Concrete examples:
 
+- `Scripts/Codex/Get-CodexStartupPrompt.ps1`
 - `Scripts/git-hooks/Enable-GitHooks.ps1`
 - `Scripts/git-tools/conflicts.ps1`
 - `Scripts/Unreal/UnrealSync.ps1`
@@ -37,6 +39,7 @@ Concrete examples:
 
 Good:
 
+- `Scripts/Codex/Get-CodexStartupPrompt.ps1`
 - `Scripts/Unreal/Sync-ProjectAssets.ps1`
 - `Scripts/Tests/Test-PluginBootstrap.ps1`
 

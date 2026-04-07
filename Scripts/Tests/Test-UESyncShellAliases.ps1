@@ -134,10 +134,14 @@ function New-ScratchPath([string]$Name) {
 function Reset-LoadedAliases {
   Remove-Item -LiteralPath Function:\Invoke-UETools -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath Function:\Invoke-ArtTools -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath Function:\Invoke-CodexTools -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath Function:\Invoke-CodexPrompt -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath Function:\Invoke-UESync -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath Function:\Invoke-CozyUESync -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath Alias:\ue-tools -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath Alias:\art-tools -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath Alias:\codex-tools -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath Alias:\codex-prompt -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath Alias:\uesync -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath Alias:\ue-sync -ErrorAction SilentlyContinue
 }
@@ -180,11 +184,14 @@ try {
   }
   . $helperPath
   $artToolsAvailable = Test-ProjectAliasRepoScriptAvailable -RelativePath "New-ArtSourcePath.ps1"
+  $codexToolsAvailable = Test-ProjectAliasRepoScriptAvailable -RelativePath "..\Codex\Get-CodexStartupPrompt.ps1"
 
   Step "Case 1: Alias definition table is present and complete"
   $definitions = @(Get-ProjectAliasDefinitions)
   $definitionIds = @($definitions | ForEach-Object { $_.Id })
-  $expectedAliasCount = if ($artToolsAvailable) { 2 } else { 1 }
+  $expectedAliasCount = 1
+  if ($artToolsAvailable) { $expectedAliasCount++ }
+  if ($codexToolsAvailable) { $expectedAliasCount += 2 }
   Assert-Condition "case1 expected aliases defined" ($definitions.Count -eq $expectedAliasCount) "definition count=$expectedAliasCount"
   Assert-Condition "case1 includes ue-tools" ($definitionIds -contains "ue-tools") "ue-tools definition found"
   Assert-Condition "case1 ue-tools function mapping" ((@($definitions | Where-Object { $_.Id -eq "ue-tools" })[0].FunctionName) -eq "Invoke-UETools") "ue-tools maps to Invoke-UETools"
@@ -194,6 +201,15 @@ try {
   }
   else {
     Assert-Condition "case1 omits art-tools without script" (-not ($definitionIds -contains "art-tools")) "art-tools definition omitted"
+  }
+  if ($codexToolsAvailable) {
+    Assert-Condition "case1 includes codex-tools" ($definitionIds -contains "codex-tools") "codex-tools definition found"
+    Assert-Condition "case1 codex-tools function mapping" ((@($definitions | Where-Object { $_.Id -eq "codex-tools" })[0].FunctionName) -eq "Invoke-CodexTools") "codex-tools maps to Invoke-CodexTools"
+    Assert-Condition "case1 includes codex-prompt" ($definitionIds -contains "codex-prompt") "codex-prompt definition found"
+    Assert-Condition "case1 codex-prompt function mapping" ((@($definitions | Where-Object { $_.Id -eq "codex-prompt" })[0].FunctionName) -eq "Invoke-CodexPrompt") "codex-prompt maps to Invoke-CodexPrompt"
+  }
+  else {
+    Assert-Condition "case1 omits codex tools without script" (-not ($definitionIds -contains "codex-tools")) "codex tools omitted"
   }
 
   Step "Case 2: Register-ProjectShellAliases wires aliases in current session"
@@ -209,6 +225,16 @@ try {
   else {
     Assert-Condition "case2 art-tools alias not registered" (-not (Get-Alias -Name "art-tools" -ErrorAction SilentlyContinue)) "art-tools alias absent"
     Assert-Condition "case2 metadata omits art-tools" (-not ($registered.Aliases -contains "art-tools")) "metadata omits art-tools"
+  }
+  if ($codexToolsAvailable) {
+    Assert-Condition "case2 codex-tools alias maps to function" (((Get-Alias -Name "codex-tools").Definition) -eq "Invoke-CodexTools") "codex-tools -> Invoke-CodexTools"
+    Assert-Condition "case2 codex-prompt alias maps to function" (((Get-Alias -Name "codex-prompt").Definition) -eq "Invoke-CodexPrompt") "codex-prompt -> Invoke-CodexPrompt"
+    Assert-Condition "case2 metadata includes codex-tools" ($registered.Aliases -contains "codex-tools") "metadata contains codex-tools"
+    Assert-Condition "case2 metadata includes codex-prompt" ($registered.Aliases -contains "codex-prompt") "metadata contains codex-prompt"
+  }
+  else {
+    Assert-Condition "case2 codex-tools alias not registered" (-not (Get-Alias -Name "codex-tools" -ErrorAction SilentlyContinue)) "codex-tools alias absent"
+    Assert-Condition "case2 metadata omits codex-tools" (-not ($registered.Aliases -contains "codex-tools")) "metadata omits codex-tools"
   }
 
   Step "Case 3: Install writes bootstrap snippet (no giant function strings)"
@@ -226,12 +252,21 @@ try {
   Assert-TextContains "case3 snippet references helper path" $newContent $helperPath
   Assert-TextNotContains "case3 no inline ue function definition" $newContent "function Invoke-UETools"
   Assert-TextNotContains "case3 no inline art function definition" $newContent "function Invoke-ArtTools"
+  Assert-TextNotContains "case3 no inline codex tools function definition" $newContent "function Invoke-CodexTools"
+  Assert-TextNotContains "case3 no inline codex prompt function definition" $newContent "function Invoke-CodexPrompt"
   Assert-Condition "case3 metadata includes ue-tools" ($installNew.Aliases -contains "ue-tools") "metadata contains ue-tools"
   if ($artToolsAvailable) {
     Assert-Condition "case3 metadata includes art-tools" ($installNew.Aliases -contains "art-tools") "metadata contains art-tools"
   }
   else {
     Assert-Condition "case3 metadata omits art-tools" (-not ($installNew.Aliases -contains "art-tools")) "metadata omits art-tools"
+  }
+  if ($codexToolsAvailable) {
+    Assert-Condition "case3 metadata includes codex-tools" ($installNew.Aliases -contains "codex-tools") "metadata contains codex-tools"
+    Assert-Condition "case3 metadata includes codex-prompt" ($installNew.Aliases -contains "codex-prompt") "metadata contains codex-prompt"
+  }
+  else {
+    Assert-Condition "case3 metadata omits codex-tools" (-not ($installNew.Aliases -contains "codex-tools")) "metadata omits codex-tools"
   }
 
   Step "Case 4: Installer is idempotent"
@@ -296,6 +331,19 @@ try {
   }
   else {
     Skip "case7 art-tools help" "New-ArtSourcePath.ps1 is not present in this repo."
+  }
+
+  Step "Case 7b: codex-tools help works after profile bootstrap"
+  if ($codexToolsAvailable) {
+    $codexToolsHelp = @(& { codex-tools help } 2>&1 6>&1)
+    $codexPromptHelp = @(& { codex-prompt --help } 2>&1 6>&1)
+    $codexToolsHelpText = ($codexToolsHelp | ForEach-Object { "$_" }) -join "`n"
+    $codexPromptHelpText = ($codexPromptHelp | ForEach-Object { "$_" }) -join "`n"
+    Assert-TextContains "case7b codex-tools help line" $codexToolsHelpText "codex-tools <command> [options]"
+    Assert-TextContains "case7b codex-prompt usage line" $codexPromptHelpText "codex-prompt [-Task <text>] [-IncludePrivate] [-CopyToClipboard]"
+  }
+  else {
+    Skip "case7b codex tools help" "Get-CodexStartupPrompt.ps1 is not present in this repo."
   }
 
   Step "Case 8: ue-tools unknown subcommand gives actionable error"
@@ -432,6 +480,17 @@ $outPath = Join-Path (Split-Path -Parent $PSCommandPath) "last-run.json"
   $legacyInstall = Install-UEToolsShellAliases -ProfilePath $profileCompat -AliasScriptPath $helperPath
   Assert-Condition "case13 wrapper returns ue-tools alias" ($legacyInstall.Aliases -contains "ue-tools") "Install-UEToolsShellAliases returns ue-tools metadata"
   Assert-Condition "case13 wrapper preserves function name" ($legacyInstall.FunctionName -eq "Invoke-UETools") "FunctionName=Invoke-UETools"
+
+  Step "Case 14: Codex alias install wrapper remains available"
+  $profileCodex = New-ScratchPath "profile-codex.ps1"
+  $codexInstall = Install-CodexToolsShellAliases -ProfilePath $profileCodex -AliasScriptPath $helperPath
+  if ($codexToolsAvailable) {
+    Assert-Condition "case14 wrapper returns codex-tools alias" ($codexInstall.Aliases -contains "codex-tools") "Install-CodexToolsShellAliases returns codex-tools metadata"
+    Assert-Condition "case14 wrapper preserves function name" ($codexInstall.FunctionName -eq "Invoke-CodexTools") "FunctionName=Invoke-CodexTools"
+  }
+  else {
+    Assert-Condition "case14 wrapper omits codex-tools when unavailable" ($codexInstall.Aliases.Count -eq 0) "no codex-tools aliases returned"
+  }
 
   Step "Summary"
   Write-Log ("PASS={0} FAIL={1} WARN={2} SKIP={3}" -f $script:PassCount, $script:FailCount, $script:WarnCount, $script:SkipCount) Cyan

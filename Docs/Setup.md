@@ -60,5 +60,6 @@ If automated Unreal tooling cannot find the engine, fix one of those sources ins
 [ ] core.hooksPath is set to .githooks
 [ ] git ours / git theirs / git conflicts aliases are configured
 [ ] ue-tools help works in a new PowerShell session
+[ ] codex-tools help works in a new PowerShell session
 [ ] website/ npm install completed if docs preview is needed
 ```
