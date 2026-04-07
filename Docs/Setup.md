@@ -35,6 +35,8 @@ npm install
 npm start
 ```
 
+The Docusaurus site is already set up in `website/`. You do not need to create a new site scaffold for this repo. See [Docusaurus Setup](./DocsSite/Docusaurus-Setup.md) for the edit/preview/build workflow.
+
 ## Engine Discovery Rules
 
 The shared Unreal tooling resolves the engine in this order:

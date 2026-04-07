@@ -41,6 +41,13 @@ const sidebars: SidebarsConfig = {
         'CodingStandards/Generated/UnrealCppStandard-Digest',
       ],
     },
+    {
+      type: 'category',
+      label: 'Game Design',
+      items: [
+        'GameDesign/README',
+      ]
+    }
   ],
 };
 
