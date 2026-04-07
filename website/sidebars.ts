@@ -4,6 +4,16 @@ const sidebars: SidebarsConfig = {
   docsSidebar: [
     'README',
     'Setup',
+    {
+      type: 'category',
+      label: 'Codex Context',
+      items: [
+        'Codex/README',
+        'Codex/Project-Context',
+        'Codex/How-It-Fits-Together',
+        'Codex/Shared-vs-Private',
+      ],
+    },
     'Testing',
     {
       type: 'category',

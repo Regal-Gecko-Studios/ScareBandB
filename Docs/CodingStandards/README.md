@@ -60,6 +60,18 @@ Refresh coding-standard snapshot:
 - When upgrading Unreal engine version.
 - When Epic updates the coding-standard page.
 - At least once per quarter while active development is ongoing.
+- At minimum, treat the snapshot as stale once it is older than six months and refresh it before relying on it as the current local reference.
+
+## Codex Usage
+
+- Agents should scrutinize `Docs/CodingStandards/` thoroughly before C++ or style-sensitive work.
+- Start with this file, then inspect the latest snapshot folder under `Docs/CodingStandards/Snapshots/`.
+- Use `Generated/UnrealCppStandard-Digest.md` as a convenience summary, not as a replacement for the latest snapshot metadata.
+- If the latest snapshot is older than six months:
+  1. Run `pwsh -File Docs/CodingStandards/Sync-UnrealCppStandard.ps1`
+  2. Update or create the matching `SOURCE.md`
+  3. Run `pwsh -File Docs/CodingStandards/Parse-UnrealCppStandard.ps1`
+  4. Commit the refreshed snapshot and digest in docs scope
 
 ## Team Enforcement Checklist
 
