@@ -20,12 +20,13 @@ slug: /
 ## Read Order
 
 1. [Setup](./Setup.md)
-2. [Codex Context](./Codex/README.md)
-3. [Workflow](./Pipeline/README.md)
-4. [Target Structure](./ProjectStructure/Target-Structure.md)
+2. [Game Design](./GameDesign/README.md)
+3. [Target Structure](./ProjectStructure/Target-Structure.md)
+4. [Workflow](./Pipeline/README.md)
 5. [Testing](./Testing.md)
 6. [Coding Standards](./CodingStandards/README.md)
 7. [Docusaurus Setup](./DocsSite/Docusaurus-Setup.md)
+8. [Codex Context](./Codex/README.md)
 
 ## High-Level Ownership
 

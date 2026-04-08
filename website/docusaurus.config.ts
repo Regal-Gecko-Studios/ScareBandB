@@ -49,8 +49,16 @@ const config: Config = {
 
   themeConfig: {
     image: 'img/docusaurus-social-card.jpg',
+    announcementBar: {
+      id: 'lean-docs',
+      content: 'Living repo docs. Build gameplay first. Use process only where it removes friction.',
+      backgroundColor: '#7d101f',
+      textColor: '#fff5f7',
+      isCloseable: true,
+    },
     colorMode: {
-      respectPrefersColorScheme: true,
+      defaultMode: 'dark',
+      respectPrefersColorScheme: false,
     },
     navbar: {
       title: 'ScareBandB',
@@ -62,7 +70,19 @@ const config: Config = {
         {
           to: '/docs/',
           position: 'left',
-          label: 'Docs',
+          label: 'Handbook',
+        },
+        {
+          type: 'doc',
+          docId: 'GameDesign/README',
+          position: 'left',
+          label: 'Game Design',
+        },
+        {
+          type: 'doc',
+          docId: 'Pipeline/README',
+          position: 'left',
+          label: 'Workflow',
         },
         {
           type: 'doc',
@@ -70,23 +90,21 @@ const config: Config = {
           position: 'left',
           label: 'Setup',
         },
-        {
-          type: 'doc',
-          docId: 'Testing',
-          position: 'left',
-          label: 'Testing',
-        }
       ],
     },
     footer: {
       style: 'dark',
       links: [
         {
-          title: 'Project',
+          title: 'Build',
           items: [
             {
               label: 'Overview',
               to: '/docs/',
+            },
+            {
+              label: 'Setup',
+              to: '/docs/setup',
             },
             {
               label: 'Workflow',
@@ -95,24 +113,36 @@ const config: Config = {
           ],
         },
         {
-          title: 'Tooling',
+          title: 'Design',
           items: [
             {
-              label: 'Setup',
-              to: '/docs/setup',
+              label: 'Game Design',
+              to: '/docs/game-design/overview',
             },
             {
-              label: 'Testing',
-              to: '/docs/testing',
+              label: 'Project Structure',
+              to: '/docs/project-structure',
             },
           ],
         },
         {
-          title: 'Docs Site',
+          title: 'Reference',
           items: [
             {
-              label: 'Docusaurus Setup',
-              to: '/docs/docs-site/setup',
+              label: 'Testing',
+              to: '/docs/testing',
+            },
+            {
+              label: 'Coding Standards',
+              to: '/docs/coding-standards',
+            },
+            {
+              label: 'Docs Site',
+              to: '/docs/docs-site',
+            },
+            {
+              label: 'Codex Context',
+              to: '/docs/codex-context',
             },
           ],
         },

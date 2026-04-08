@@ -1,3 +1,8 @@
+---
+title: Coding Standards
+slug: /coding-standards
+---
+
 # Unreal C++ Coding Standards
 
 This project follows Epic's Unreal C++ coding standard at all times.
