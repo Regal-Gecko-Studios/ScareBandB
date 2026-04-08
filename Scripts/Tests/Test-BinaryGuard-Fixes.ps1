@@ -15,7 +15,7 @@
 #   -FailFast      : Quit immediately on first FAIL, run cleanup, and mark remaining tests as SKIPPED
 #
 # NOTE:
-# - All assertion callsites MUST pass a unique test name.
+# - All assertion call sites MUST pass a unique test name.
 # - This script uses New-TestName() to guarantee uniqueness even if the same base phrase is re-used.
 
 [CmdletBinding()]
