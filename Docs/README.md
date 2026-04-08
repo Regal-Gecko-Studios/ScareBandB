@@ -23,10 +23,9 @@ slug: /
 2. [Codex Context](./Codex/README.md)
 3. [Workflow](./Pipeline/README.md)
 4. [Target Structure](./ProjectStructure/Target-Structure.md)
-5. [UE Editor Migration](./ProjectStructure/UE-Editor-Migration.md)
-6. [Testing](./Testing.md)
-7. [Coding Standards](./CodingStandards/README.md)
-8. [Docusaurus Setup](./DocsSite/Docusaurus-Setup.md)
+5. [Testing](./Testing.md)
+6. [Coding Standards](./CodingStandards/README.md)
+7. [Docusaurus Setup](./DocsSite/Docusaurus-Setup.md)
 
 ## High-Level Ownership
 

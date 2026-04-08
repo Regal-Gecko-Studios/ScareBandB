@@ -1,12 +1,9 @@
 /.git
 /.githooks
 /.vscode
-/Binaries
-/Content
-/DerivedDataCache
+/ArtSource
+/Docs
 /Intermediate
 /Saved
-/website/.docusaurus
-/website/build
-/website/node_modules
-/Scripts/Tests/*Results
+/Scripts
+/website

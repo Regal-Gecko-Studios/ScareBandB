@@ -17,8 +17,7 @@ Use this section to give Codex stable repo context without relying on old chat t
 ## Read Order
 
 1. [Project Context](./Project-Context.md)
-2. [How It Fits Together](./How-It-Fits-Together.md)
-3. [Shared vs Private Context](./Shared-vs-Private.md)
+2. [Shared vs Private Context](./Shared-vs-Private.md)
 
 ## Structure
 
