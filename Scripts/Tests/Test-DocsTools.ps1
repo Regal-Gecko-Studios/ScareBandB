@@ -123,7 +123,8 @@ function New-MinimalDocsRepo {
 
   $scratchRepo = New-ScratchPath $Name
   New-Item -ItemType Directory -Force -Path (Join-Path $scratchRepo "Docs") | Out-Null
-  New-Item -ItemType Directory -Force -Path (Join-Path $scratchRepo "website") | Out-Null
+  $scratchWebsiteRoot = Join-Path $scratchRepo "website"
+  New-Item -ItemType Directory -Force -Path $scratchWebsiteRoot | Out-Null
 
   $readmeContent = @'
 ---
@@ -137,6 +138,11 @@ sidebar_position: 1
 Minimal docs root for docs-tools testing.
 '@
   Write-Utf8NoBomFile -Path (Join-Path $scratchRepo "Docs\README.md") -Content $readmeContent
+
+  $packageSource = Join-Path $repoRoot "website\package.json"
+  if (Test-Path -LiteralPath $packageSource) {
+    Copy-Item -LiteralPath $packageSource -Destination (Join-Path $scratchWebsiteRoot "package.json") -Force
+  }
 
   return $scratchRepo
 }
@@ -171,6 +177,9 @@ function New-StubToolset {
   $npmLines = @(
     "@echo off"
     '>> "%STUB_LOG%" echo npm %*'
+    'if "%~1"=="run" if "%~2"=="start" if /i "%STUB_NPM_START_MODE%"=="sleep" ('
+    '  ping -n 60 127.0.0.1 >nul'
+    ')'
     "exit /b 0"
   )
   Write-Utf8NoBomFile -Path (Join-Path $stubRoot "npm.cmd") -Content ($npmLines -join "`r`n")
@@ -186,7 +195,8 @@ function Invoke-DocsToolsCommand {
     [Parameter(Mandatory)][string]$ScratchRepoRoot,
     [Parameter(Mandatory)][string[]]$CliArgs,
     [Parameter(Mandatory)]$Toolset,
-    [Parameter(Mandatory)][string]$SandboxRoot
+    [Parameter(Mandatory)][string]$SandboxRoot,
+    [hashtable]$ExtraEnv = @{}
   )
 
   $pwshPath = (Get-Command pwsh -ErrorAction Stop).Source
@@ -210,6 +220,7 @@ function Invoke-DocsToolsCommand {
     TEMP = $env:TEMP
     TMP = $env:TMP
     STUB_LOG = $env:STUB_LOG
+    STUB_NPM_START_MODE = $env:STUB_NPM_START_MODE
   }
 
   try {
@@ -219,6 +230,9 @@ function Invoke-DocsToolsCommand {
     $env:TEMP = $sandboxTemp
     $env:TMP = $sandboxTemp
     $env:STUB_LOG = $Toolset.CommandLog
+    foreach ($entry in $ExtraEnv.GetEnumerator()) {
+      Set-Item -Path ("Env:{0}" -f $entry.Key) -Value ([string]$entry.Value)
+    }
 
     $allArgs = @(
       "-NoLogo",
@@ -247,6 +261,7 @@ function Invoke-DocsToolsCommand {
     $env:TEMP = $previousEnv.TEMP
     $env:TMP = $previousEnv.TMP
     $env:STUB_LOG = $previousEnv.STUB_LOG
+    $env:STUB_NPM_START_MODE = $previousEnv.STUB_NPM_START_MODE
   }
 }
 
@@ -278,6 +293,9 @@ try {
   Assert-Condition "case1 help exits cleanly" ($helpResult.ExitCode -eq 0) "exit code=0" "exit code=$($helpResult.ExitCode)"
   Assert-TextContains "case1 help shows new-section" $helpResult.OutputText "docs-tools new-section <SectionPath>"
   Assert-TextContains "case1 help shows new-page" $helpResult.OutputText "docs-tools new-page <SectionPath> <PageName>"
+  Assert-TextContains "case1 help shows start" $helpResult.OutputText "docs-tools start [docusaurus-start args]"
+  Assert-TextContains "case1 help shows stop" $helpResult.OutputText "docs-tools stop"
+  Assert-TextContains "case1 help shows docusaurus passthrough" $helpResult.OutputText "docs-tools docusaurus <args...>"
   Assert-TextContains "case1 help shows install-bridge" $helpResult.OutputText "docs-tools install-bridge"
 
   Step "Case 2: new-section scaffolds a section and skips TOC without the bridge"
@@ -303,6 +321,18 @@ try {
   Assert-TextContains "case2 category position" $sectionCategoryText '"position": 9'
   Assert-TextContains "case2 category doc link" $sectionCategoryText '"id": "GameDesign/README"'
 
+  Step "Case 2b: new-section auto-assigns the next sidebar position"
+  $autoSectionRepo = New-MinimalDocsRepo -Name "repo-auto-section-position"
+  $autoSectionToolset = New-StubToolset -Name "toolset-auto-section-position"
+  $autoSectionResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $autoSectionRepo `
+    -CliArgs @("new-section", "Systems") `
+    -Toolset $autoSectionToolset `
+    -SandboxRoot (New-ScratchPath "sandbox-auto-section-position")
+  $autoSectionCategoryText = Get-Content -LiteralPath (Join-Path $autoSectionRepo "Docs\Systems\_category_.json") -Raw
+  Assert-Condition "case2b new-section exits cleanly" ($autoSectionResult.ExitCode -eq 0) "exit code=0" "exit code=$($autoSectionResult.ExitCode)"
+  Assert-TextContains "case2b default section position increments" $autoSectionCategoryText '"position": 2'
+
   Step "Case 3: new-page scaffolds a page and skips TOC without the bridge"
   $newPageResult = Invoke-DocsToolsCommand `
     -ScratchRepoRoot $noTocRepo `
@@ -317,6 +347,16 @@ try {
   Assert-TextContains "case3 page slug" $pageText "slug: /game-design/fear-loop"
   Assert-TextContains "case3 page position" $pageText "sidebar_position: 2"
   Assert-TextNotContains "case3 page omits toc marker" $pageText "<!-- docs-tools-toc -->"
+
+  Step "Case 3b: new-page auto-assigns the next sidebar position"
+  $autoPageResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $noTocRepo `
+    -CliArgs @("new-page", "GameDesign", "Escalation-Loop") `
+    -Toolset $noTocToolset `
+    -SandboxRoot (New-ScratchPath "sandbox-auto-page-position")
+  $autoPageText = Get-Content -LiteralPath (Join-Path $noTocRepo "Docs\GameDesign\Escalation-Loop.md") -Raw
+  Assert-Condition "case3b new-page exits cleanly" ($autoPageResult.ExitCode -eq 0) "exit code=0" "exit code=$($autoPageResult.ExitCode)"
+  Assert-TextContains "case3b default page position increments" $autoPageText "sidebar_position: 3"
 
   Step "Case 4: install-bridge copies the optional VS Code bridge"
   $bridgeToolset = New-StubToolset -Name "toolset-install-bridge" -CodeExtensions @("yzhang.markdown-all-in-one")
@@ -333,7 +373,50 @@ try {
   Assert-Condition "case4 bridge code copied" (Test-Path -LiteralPath (Join-Path $bridgeInstallPath "extension.js")) "extension.js copied"
   Assert-TextContains "case4 output mentions markdown extension" $installBridgeResult.OutputText "Markdown All in One is already installed."
 
-  Step "Case 5: new-page queues a TOC request when the optional bridge is available"
+  Step "Case 5: start launches a background server and stop kills it"
+  $startStopRepo = New-MinimalDocsRepo -Name "repo-start-stop"
+  $startStopToolset = New-StubToolset -Name "toolset-start-stop"
+  $startStopSandbox = New-ScratchPath "sandbox-start-stop"
+  $startResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $startStopRepo `
+    -CliArgs @("start", "--port", "3001") `
+    -Toolset $startStopToolset `
+    -SandboxRoot $startStopSandbox `
+    -ExtraEnv @{ STUB_NPM_START_MODE = "sleep" }
+  $serverStateFiles = @(Get-ChildItem -Path (Join-Path $startResult.SandboxTemp "scarebandb-docs-tools") -Recurse -Filter docs-server.json -ErrorAction SilentlyContinue)
+  $serverState = Get-Content -LiteralPath $serverStateFiles[0].FullName -Raw | ConvertFrom-Json
+  $startStubLog = Get-Content -LiteralPath $startStopToolset.CommandLog -Raw
+  Assert-Condition "case5 start exits cleanly" ($startResult.ExitCode -eq 0) "exit code=0" "exit code=$($startResult.ExitCode)"
+  Assert-TextContains "case5 output confirms background start" $startResult.OutputText "Started docs dev server in the background"
+  Assert-TextContains "case5 output includes custom port url" $startResult.OutputText "http://localhost:3001/docs/"
+  Assert-Condition "case5 server state file created" ($serverStateFiles.Count -eq 1) "docs-server.json created"
+  Assert-TextContains "case5 npm start was invoked" $startStubLog "npm run start -- --port 3001"
+  $stopResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $startStopRepo `
+    -CliArgs @("stop") `
+    -Toolset $startStopToolset `
+    -SandboxRoot $startStopSandbox
+  Assert-Condition "case5 stop exits cleanly" ($stopResult.ExitCode -eq 0) "exit code=0" "exit code=$($stopResult.ExitCode)"
+  Assert-Condition "case5 output confirms stop handling" (
+    $stopResult.OutputText.Contains("Stopped docs dev server") -or
+    $stopResult.OutputText.Contains("Removed stale docs dev server state")
+  ) "stop command reported a handled shutdown path"
+  Assert-Condition "case5 state file removed after stop" (-not (Test-Path -LiteralPath $serverStateFiles[0].FullName)) "docs-server.json removed"
+  Assert-Condition "case5 server pid stopped" (-not (Get-Process -Id $serverState.processId -ErrorAction SilentlyContinue)) "process $($serverState.processId) stopped"
+
+  Step "Case 6: docs-tools can invoke other website package scripts"
+  $scriptRepo = New-MinimalDocsRepo -Name "repo-script-passthrough"
+  $scriptToolset = New-StubToolset -Name "toolset-script-passthrough"
+  $scriptResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $scriptRepo `
+    -CliArgs @("write-heading-ids", "--dry-run") `
+    -Toolset $scriptToolset `
+    -SandboxRoot (New-ScratchPath "sandbox-script-passthrough")
+  $scriptStubLog = Get-Content -LiteralPath $scriptToolset.CommandLog -Raw
+  Assert-Condition "case6 passthrough command exits cleanly" ($scriptResult.ExitCode -eq 0) "exit code=0" "exit code=$($scriptResult.ExitCode)"
+  Assert-TextContains "case6 npm script was invoked" $scriptStubLog "npm run write-heading-ids -- --dry-run"
+
+  Step "Case 7: new-page queues a TOC request when the optional bridge is available"
   $tocRepo = New-MinimalDocsRepo -Name "repo-toc"
   New-Item -ItemType Directory -Force -Path (Join-Path $tocRepo "Docs\GameDesign") | Out-Null
   $tocToolset = New-StubToolset -Name "toolset-toc" -CodeExtensions @(
@@ -349,13 +432,13 @@ try {
   $tocPageText = Get-Content -LiteralPath $tocPagePath -Raw
   $tocRequestFiles = @(Get-ChildItem -Path (Join-Path $tocResult.SandboxTemp "scarebandb-docs-tools") -Recurse -Filter *.json -ErrorAction SilentlyContinue)
   $stubLogText = Get-Content -LiteralPath $tocToolset.CommandLog -Raw
-  Assert-Condition "case5 toc-ready new-page exits cleanly" ($tocResult.ExitCode -eq 0) "exit code=0" "exit code=$($tocResult.ExitCode)"
-  Assert-TextContains "case5 output confirms queued toc" $tocResult.OutputText "TOC request queued through the VS Code bridge."
-  Assert-TextContains "case5 page contains toc marker" $tocPageText "<!-- docs-tools-toc -->"
-  Assert-Condition "case5 request json created" ($tocRequestFiles.Count -ge 1) "request file count=$($tocRequestFiles.Count)" "expected a queued request file"
-  Assert-TextContains "case5 code cli was asked to open repo" $stubLogText "code --reuse-window"
+  Assert-Condition "case7 toc-ready new-page exits cleanly" ($tocResult.ExitCode -eq 0) "exit code=0" "exit code=$($tocResult.ExitCode)"
+  Assert-TextContains "case7 output confirms queued toc" $tocResult.OutputText "TOC request queued through the VS Code bridge."
+  Assert-TextContains "case7 page contains toc marker" $tocPageText "<!-- docs-tools-toc -->"
+  Assert-Condition "case7 request json created" ($tocRequestFiles.Count -ge 1) "request file count=$($tocRequestFiles.Count)" "expected a queued request file"
+  Assert-TextContains "case7 code cli was asked to open repo" $stubLogText "code --reuse-window"
 
-  Step "Case 6: check validates docs and runs the Docusaurus build"
+  Step "Case 8: check validates docs and runs the Docusaurus build"
   $checkRepo = New-MinimalDocsRepo -Name "repo-check-pass"
   $checkToolset = New-StubToolset -Name "toolset-check-pass"
   $checkResult = Invoke-DocsToolsCommand `
@@ -364,11 +447,11 @@ try {
     -Toolset $checkToolset `
     -SandboxRoot (New-ScratchPath "sandbox-check-pass")
   $checkStubLog = Get-Content -LiteralPath $checkToolset.CommandLog -Raw
-  Assert-Condition "case6 check exits cleanly" ($checkResult.ExitCode -eq 0) "exit code=0" "exit code=$($checkResult.ExitCode)"
-  Assert-TextContains "case6 output confirms pass" $checkResult.OutputText "Docs check passed."
-  Assert-TextContains "case6 npm build was invoked" $checkStubLog "npm run build"
+  Assert-Condition "case8 check exits cleanly" ($checkResult.ExitCode -eq 0) "exit code=0" "exit code=$($checkResult.ExitCode)"
+  Assert-TextContains "case8 output confirms pass" $checkResult.OutputText "Docs check passed."
+  Assert-TextContains "case8 npm build was invoked" $checkStubLog "npm run build"
 
-  Step "Case 7: check rejects invalid slugs before attempting a build"
+  Step "Case 9: check rejects invalid slugs before attempting a build"
   $badSlugRepo = New-MinimalDocsRepo -Name "repo-check-bad-slug"
   $badSlugToolset = New-StubToolset -Name "toolset-check-bad-slug"
   $badDocPath = Join-Path $badSlugRepo "Docs\Bad-Slug.md"
@@ -387,11 +470,11 @@ slug: /docs/bad-slug
     -Toolset $badSlugToolset `
     -SandboxRoot (New-ScratchPath "sandbox-check-bad-slug")
   $badSlugStubLog = Get-Content -LiteralPath $badSlugToolset.CommandLog -Raw
-  Assert-Condition "case7 check fails for /docs/ slug" ($badSlugResult.ExitCode -ne 0) "exit code=$($badSlugResult.ExitCode)" "expected non-zero exit code"
-  Assert-TextContains "case7 output explains bad slug" $badSlugResult.OutputText "Slug should not start with /docs/:"
-  Assert-TextNotContains "case7 npm build not invoked on validation failure" $badSlugStubLog "npm run build"
+  Assert-Condition "case9 check fails for /docs/ slug" ($badSlugResult.ExitCode -ne 0) "exit code=$($badSlugResult.ExitCode)" "expected non-zero exit code"
+  Assert-TextContains "case9 output explains bad slug" $badSlugResult.OutputText "Slug should not start with /docs/:"
+  Assert-TextNotContains "case9 npm build not invoked on validation failure" $badSlugStubLog "npm run build"
 
-  Step "Case 8: check rejects unprocessed TOC markers"
+  Step "Case 10: check rejects unprocessed TOC markers"
   $markerRepo = New-MinimalDocsRepo -Name "repo-check-toc-marker"
   $markerToolset = New-StubToolset -Name "toolset-check-toc-marker"
   $markerDocPath = Join-Path $markerRepo "Docs\Marker.md"
@@ -411,8 +494,8 @@ slug: /marker
     -CliArgs @("check") `
     -Toolset $markerToolset `
     -SandboxRoot (New-ScratchPath "sandbox-check-toc-marker")
-  Assert-Condition "case8 check fails for unprocessed toc marker" ($markerResult.ExitCode -ne 0) "exit code=$($markerResult.ExitCode)" "expected non-zero exit code"
-  Assert-TextContains "case8 output explains toc marker" $markerResult.OutputText "Unprocessed TOC marker remains in:"
+  Assert-Condition "case10 check fails for unprocessed toc marker" ($markerResult.ExitCode -ne 0) "exit code=$($markerResult.ExitCode)" "expected non-zero exit code"
+  Assert-TextContains "case10 output explains toc marker" $markerResult.OutputText "Unprocessed TOC marker remains in:"
 
   Step "Summary"
   Write-Log ("PASS={0} FAIL={1} WARN={2} SKIP={3}" -f $script:PassCount, $script:FailCount, $script:WarnCount, $script:SkipCount) Cyan

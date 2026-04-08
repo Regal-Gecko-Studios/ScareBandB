@@ -32,10 +32,16 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File Scripts/Init-Repo.ps1
 ```powershell
 Set-Location website
 npm install
-docs-tools preview
+docs-tools start
 ```
 
 The Docusaurus site is already set up in `website/`. You do not need to create a new site scaffold for this repo. See [Docusaurus Setup](./DocsSite/Docusaurus-Setup.md) for the edit/preview/build workflow.
+
+When you are done with the local docs server:
+
+```powershell
+docs-tools stop
+```
 
 If you want scaffolded docs pages and optional TOC automation in VS Code:
 

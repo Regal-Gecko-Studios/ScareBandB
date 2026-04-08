@@ -1,7 +1,9 @@
+/.codex-local
 /.git
 /.githooks
 /.vscode
 /ArtSource
+/DerivedDataCache
 /Docs
 /Intermediate
 /Saved
