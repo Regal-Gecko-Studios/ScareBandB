@@ -171,6 +171,10 @@ function Get-ProjectAliasLegacyMarkers {
     [pscustomobject]@{
       StartMarker = "# >>> art-tools aliases >>>"
       EndMarker = "# <<< art-tools aliases <<<"
+    },
+    [pscustomobject]@{
+      StartMarker = "# >>> docs-tools aliases >>>"
+      EndMarker = "# <<< docs-tools aliases <<<"
     }
   )
 }
@@ -190,6 +194,14 @@ function Get-ProjectAliasDefinitions {
         Id = "art-tools"
         FunctionName = "Invoke-ArtTools"
         Aliases = @("art-tools")
+      })
+  }
+
+  if (Test-ProjectAliasRepoScriptAvailable -RelativePath "..\Docs\DocsTools.ps1") {
+    [void]$definitions.Add([pscustomobject]@{
+        Id = "docs-tools"
+        FunctionName = "Invoke-DocsTools"
+        Aliases = @("docs-tools")
       })
   }
 
@@ -354,6 +366,18 @@ function Invoke-ArtTools {
     -NotFoundMessagePrefix "ArtSource path script not found"
 
   & $artScript @argsList
+}
+
+function Invoke-DocsTools {
+  $argsList = @($args)
+
+  $repoRoot = Get-RepoRootOrThrow -InvokerName "Invoke-DocsTools"
+  $docsScript = Resolve-RepoScriptOrThrow `
+    -RepoRoot $repoRoot `
+    -RelativePath "Scripts\Docs\DocsTools.ps1" `
+    -NotFoundMessagePrefix "Docs tools script not found"
+
+  & $docsScript -RepoRoot $repoRoot @argsList
 }
 
 function Show-CodexPromptHelp {
@@ -572,6 +596,25 @@ function Install-ArtToolsShellAliases {
 
   $result = Install-ProjectShellAliases -ProfilePath $ProfilePath -AliasScriptPath $AliasScriptPath
   $group = @($result.AliasGroups | Where-Object { $_.Id -eq "art-tools" } | Select-Object -First 1)
+
+  [pscustomobject]@{
+    ProfilePath = $result.ProfilePath
+    AliasScriptPath = $result.AliasScriptPath
+    FunctionName = if ($group.Count -gt 0) { $group[0].FunctionName } else { $null }
+    Aliases = if ($group.Count -gt 0) { @($group[0].Aliases) } else { @() }
+    StartMarker = $result.StartMarker
+    EndMarker = $result.EndMarker
+  }
+}
+
+function Install-DocsToolsShellAliases {
+  param(
+    [string]$ProfilePath,
+    [string]$AliasScriptPath
+  )
+
+  $result = Install-ProjectShellAliases -ProfilePath $ProfilePath -AliasScriptPath $AliasScriptPath
+  $group = @($result.AliasGroups | Where-Object { $_.Id -eq "docs-tools" } | Select-Object -First 1)
 
   [pscustomobject]@{
     ProfilePath = $result.ProfilePath

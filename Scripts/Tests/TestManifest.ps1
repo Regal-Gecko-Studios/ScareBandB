@@ -58,6 +58,16 @@ function Get-ProjectTestManifest {
       -ResultDirectory "Scripts/Tests/Test-UESyncShellAliasesResults")
 
     (New-TestManifestEntry `
+      -Id "docs-tools" `
+      -Name "Docs Tools" `
+      -Path "Scripts/Tests/Test-DocsTools.ps1" `
+      -Category "docs" `
+      -Description "Validates docs-tools scaffolding, optional VS Code bridge integration, and docs-site checks." `
+      -SupportsNoCleanup $true `
+      -SupportsFailFast $true `
+      -ResultDirectory "Scripts/Tests/Test-DocsToolsResults")
+
+    (New-TestManifestEntry `
       -Id "codex-startup-prompt" `
       -Name "Codex Startup Prompt" `
       -Path "Scripts/Tests/Test-CodexStartupPrompt.ps1" `

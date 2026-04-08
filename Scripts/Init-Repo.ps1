@@ -154,6 +154,7 @@ $requiredHelpers = @(
   "Scripts\git-tools\conflicts.ps1",
   "Scripts\git-tools\GitConflictHelpers.ps1",
   "Scripts\Codex\Get-CodexStartupPrompt.ps1",
+  "Scripts\Docs\DocsTools.ps1",
   "Scripts\Unreal\ProjectContext.ps1",
   "Scripts\Unreal\ProjectShellAliases.ps1"
 )
@@ -244,6 +245,10 @@ else {
       Write-Host "  usage: art-tools --help" -ForegroundColor Green
       Write-Host "  usage: art-tools" -ForegroundColor Green
     }
+    if ($aliasInstall.Aliases -contains "docs-tools") {
+      Write-Host "  usage: docs-tools help" -ForegroundColor Green
+      Write-Host "  usage: docs-tools new-page GameDesign Fear-Loop -Title `"Fear Loop`"" -ForegroundColor Green
+    }
     if ($aliasInstall.Aliases -contains "codex-tools") {
       Write-Host "  usage: codex-tools help" -ForegroundColor Green
       Write-Host "  usage: codex-prompt -Task `"Fix UnrealSync tests`"" -ForegroundColor Green
@@ -298,6 +303,9 @@ Write-Host "  - During merge/rebase conflicts of binary files, use: git ours / g
 Write-Host "  - Run Unreal tools manually with: ue-tools help" -ForegroundColor Cyan
 if (Test-Path -LiteralPath (Join-Path $repoRoot "Scripts\Unreal\New-ArtSourcePath.ps1")) {
   Write-Host "  - Run ArtSource tools manually with: art-tools --help" -ForegroundColor Cyan
+}
+if (Test-Path -LiteralPath (Join-Path $repoRoot "Scripts\Docs\DocsTools.ps1")) {
+  Write-Host "  - Run docs tools manually with: docs-tools help" -ForegroundColor Cyan
 }
 if (Test-Path -LiteralPath (Join-Path $repoRoot "Scripts\Codex\Get-CodexStartupPrompt.ps1")) {
   Write-Host "  - Build a Codex startup prompt with: codex-prompt -IncludePrivate" -ForegroundColor Cyan

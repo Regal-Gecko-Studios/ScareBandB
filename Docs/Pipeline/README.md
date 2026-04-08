@@ -38,7 +38,9 @@ Only start work when the output is clean or intentionally understood.
 - Start fresh Codex sessions with `codex-prompt` or `codex-tools prompt` when you want the repo docs and local context called out consistently.
 - Use `git ours`, `git theirs`, and `git conflicts` for guarded binary conflict handling.
 - Run the relevant script tests before changing hook or automation behavior.
-- Preview docs locally in Docusaurus when editing navigation or structure-heavy pages.
+- Use `docs-tools new-section` and `docs-tools new-page` for routine docs scaffolding.
+- Run `docs-tools check` before merging docs-structure or docs-site workflow changes.
+- Preview docs locally when editing navigation or structure-heavy pages with `docs-tools preview`.
 
 ## Do Not
 
