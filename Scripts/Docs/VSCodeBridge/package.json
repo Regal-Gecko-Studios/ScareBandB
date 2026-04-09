@@ -1,0 +1,23 @@
+{
+  "name": "scarebandb-docs-tools-bridge",
+  "displayName": "ScareBandB Docs Tools Bridge",
+  "description": "Optional VS Code bridge for ScareBandB docs-tools automation.",
+  "version": "0.0.1",
+  "publisher": "rim28",
+  "engines": {
+    "vscode": "^1.77.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:scarebandb.docsBridge.processPendingRequests"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "scarebandb.docsBridge.processPendingRequests",
+        "title": "ScareBandB Docs Bridge: Process Pending Requests"
+      }
+    ]
+  }
+}

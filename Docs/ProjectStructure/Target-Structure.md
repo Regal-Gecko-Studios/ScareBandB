@@ -38,21 +38,39 @@ This document defines the intended project layout for `ScareBandB` as the game g
 Content/
 |- Art/
 |  |- Materials/
+|  |  |- House/
+|  |  |- Props/
+|  |  |- Characters/
+|  |     |- Ghosts/
+|  |     |- Guests/
 |  |- Meshes/
 |  |  |- House/
 |  |  |- Props/
+|  |  |- Characters/
+|  |     |- Ghosts/
+|  |     |- Guests/
 |  |- Textures/
+|  |  |- House/
+|  |  |- Props/
+|  |  |- Characters/
+|  |     |- Ghosts/
+|  |     |- Guests/
+|  |- Animations/
+|  |  |- Characters/
+|  |     |- Ghosts/
+|  |     |- Guests/
+|  |- UI/
 |  |- VFX/
 |- Audio/
-|- Characters/
-|  |- Ghosts/
-|  |- Guests/
+|  |- Props/
+|  |- Characters/
+|     |- Ghosts/
+|     |- Guests/
 |- Data/
+|  |- Abilities/
 |  |- Guests/
 |  |- Rooms/
 |  |- Scares/
-|- Gameplay/
-|  |- Abilities/
 |  |- StateTrees/
 |  |- Tags/
 |- Input/
@@ -61,7 +79,6 @@ Content/
 |  |- Test/
 |  |- Dev/
 |     |- <UserName>/
-|- UI/
 |- Developers/
 |- __ExternalActors__/
 |- __ExternalObjects__/

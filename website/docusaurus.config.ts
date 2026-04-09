@@ -1,11 +1,11 @@
-import {themes as prismThemes} from 'prism-react-renderer';
-import type {Config} from '@docusaurus/types';
+import { themes as prismThemes } from 'prism-react-renderer';
+import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'ScareBandB Docs',
   tagline: 'Repo tooling, Unreal workflow, and living project documentation.',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/logo.svg',
 
   future: {
     v4: true,
@@ -36,7 +36,7 @@ const config: Config = {
           path: '../Docs',
           routeBasePath: 'docs',
           sidebarPath: './sidebars.ts',
-          exclude: ['**/Snapshots/**', '**/Templates/**'],
+          exclude: ['**/Current/**', '**/Templates/**'],
         },
         blog: false,
         theme: {
@@ -48,8 +48,16 @@ const config: Config = {
 
   themeConfig: {
     image: 'img/docusaurus-social-card.jpg',
+    announcementBar: {
+      id: 'lean-docs',
+      content: 'Living repo docs. Build gameplay first. Use process only where it removes friction.',
+      backgroundColor: '#7d101f',
+      textColor: '#fff5f7',
+      isCloseable: true,
+    },
     colorMode: {
-      respectPrefersColorScheme: true,
+      defaultMode: 'dark',
+      respectPrefersColorScheme: false,
     },
     navbar: {
       title: 'ScareBandB',
@@ -61,7 +69,19 @@ const config: Config = {
         {
           to: '/docs/',
           position: 'left',
-          label: 'Docs',
+          label: 'Overview',
+        },
+        {
+          type: 'doc',
+          docId: 'GameDesign/README',
+          position: 'left',
+          label: 'Game Design',
+        },
+        {
+          type: 'doc',
+          docId: 'Pipeline/README',
+          position: 'left',
+          label: 'Workflow',
         },
         {
           type: 'doc',
@@ -69,36 +89,38 @@ const config: Config = {
           position: 'left',
           label: 'Setup',
         },
-        {
-          type: 'doc',
-          docId: 'Testing',
-          position: 'left',
-          label: 'Testing',
-        },
       ],
     },
     footer: {
       style: 'dark',
       links: [
         {
-          title: 'Project',
+          title: 'Start',
           items: [
             {
               label: 'Overview',
               to: '/docs/',
             },
             {
-              label: 'Workflow',
-              to: '/docs/workflow',
+              label: 'Game Design',
+              to: '/docs/game-design/overview',
+            },
+            {
+              label: 'Setup',
+              to: '/docs/setup',
             },
           ],
         },
         {
-          title: 'Tooling',
+          title: 'Build',
           items: [
             {
-              label: 'Setup',
-              to: '/docs/setup',
+              label: 'Workflow',
+              to: '/docs/workflow',
+            },
+            {
+              label: 'Project Structure',
+              to: '/docs/project-structure',
             },
             {
               label: 'Testing',
@@ -107,16 +129,16 @@ const config: Config = {
           ],
         },
         {
-          title: 'Docs Site',
+          title: 'Reference',
           items: [
             {
-              label: 'Docusaurus Setup',
-              to: '/docs/docs-site/setup',
+              label: 'Coding Standards',
+              to: '/docs/coding-standards',
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} ScareBandB. Built with Docusaurus.`,
+      copyright: `ScareBandB documentation for the current project state. ${new Date().getFullYear()}.`,
     },
     prism: {
       theme: prismThemes.github,

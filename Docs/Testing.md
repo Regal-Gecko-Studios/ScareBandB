@@ -1,6 +1,6 @@
 ---
 title: Testing
-sidebar_position: 4
+sidebar_position: 6
 slug: /testing
 ---
 
@@ -18,6 +18,8 @@ The master runner executes tests serially on purpose. Some tests create branches
 
 - `pwsh -NoProfile -ExecutionPolicy Bypass -File Scripts/git-hooks/Test-Hooks.ps1`
 - `pwsh -NoProfile -ExecutionPolicy Bypass -File Scripts/Tests/Test-UESyncShellAliases.ps1`
+- `pwsh -NoProfile -ExecutionPolicy Bypass -File Scripts/Tests/Test-DocsTools.ps1`
+- `pwsh -NoProfile -ExecutionPolicy Bypass -File Scripts/Tests/Test-CodexStartupPrompt.ps1`
 - `pwsh -NoProfile -ExecutionPolicy Bypass -File Scripts/Tests/Test-UnrealSync-Regeneration.ps1`
 - `pwsh -NoProfile -ExecutionPolicy Bypass -File Scripts/Tests/Test-New-ArtSourcePath.ps1`
 - `pwsh -NoProfile -ExecutionPolicy Bypass -File Scripts/Tests/Test-UnrealSync.ps1`
@@ -27,6 +29,8 @@ The master runner executes tests serially on purpose. Some tests create branches
 
 - `Test-Hooks.ps1`: validates committed hook plumbing, `core.hooksPath`, git helper aliases, and Git Bash sourcing.
 - `Test-UESyncShellAliases.ps1`: validates `ue-tools`, optional `art-tools`, profile bootstrap, and compatibility shims.
+- `Test-DocsTools.ps1`: validates `docs-tools` scaffolding, optional VS Code bridge install flow, TOC request queuing, and docs-site validation behavior.
+- `Test-CodexStartupPrompt.ps1`: validates the Codex startup prompt builder output and local private-context handling.
 - `Test-UnrealSync-Regeneration.ps1`: validates project-file regeneration and engine-resolution fallback paths in isolation. One case intentionally forces an unresolved-engine failure and should still end in a green summary.
 - `Test-New-ArtSourcePath.ps1`: validates canonical `ArtSource/_Template` handling and new asset folder creation.
 - `Test-UnrealSync.ps1`: validates structural trigger detection and hook/non-interactive behavior on a committed clean repo.

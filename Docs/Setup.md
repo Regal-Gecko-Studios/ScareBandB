@@ -32,8 +32,25 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File Scripts/Init-Repo.ps1
 ```powershell
 Set-Location website
 npm install
-npm start
+docs-tools start
 ```
+
+The Docusaurus site is already set up in `website/`. You do not need to create a new site scaffold for this repo. See [Docusaurus Setup](./DocsSite/Docusaurus-Setup.md) for the edit/preview/build workflow.
+
+When you are done with the local docs server:
+
+```powershell
+docs-tools stop
+```
+
+If you want scaffolded docs pages and optional TOC automation in VS Code:
+
+```powershell
+docs-tools help
+docs-tools install-bridge
+```
+
+`docs-tools install-bridge` is optional. It only enables table-of-contents generation for new pages and sections when `Markdown All in One` is also installed in VS Code.
 
 ## Engine Discovery Rules
 
@@ -60,5 +77,7 @@ If automated Unreal tooling cannot find the engine, fix one of those sources ins
 [ ] core.hooksPath is set to .githooks
 [ ] git ours / git theirs / git conflicts aliases are configured
 [ ] ue-tools help works in a new PowerShell session
+[ ] docs-tools help works in a new PowerShell session
+[ ] codex-tools help works in a new PowerShell session
 [ ] website/ npm install completed if docs preview is needed
 ```

@@ -37,6 +37,7 @@ FileOpenOrder/
 *.code-workspace
 .idea/
 *.iml
+.codex-local/
 website/node_modules/
 website/build/
 website/.docusaurus/

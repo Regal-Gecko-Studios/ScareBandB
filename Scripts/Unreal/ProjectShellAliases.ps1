@@ -171,6 +171,10 @@ function Get-ProjectAliasLegacyMarkers {
     [pscustomobject]@{
       StartMarker = "# >>> art-tools aliases >>>"
       EndMarker = "# <<< art-tools aliases <<<"
+    },
+    [pscustomobject]@{
+      StartMarker = "# >>> docs-tools aliases >>>"
+      EndMarker = "# <<< docs-tools aliases <<<"
     }
   )
 }
@@ -190,6 +194,28 @@ function Get-ProjectAliasDefinitions {
         Id = "art-tools"
         FunctionName = "Invoke-ArtTools"
         Aliases = @("art-tools")
+      })
+  }
+
+  if (Test-ProjectAliasRepoScriptAvailable -RelativePath "..\Docs\DocsTools.ps1") {
+    [void]$definitions.Add([pscustomobject]@{
+        Id = "docs-tools"
+        FunctionName = "Invoke-DocsTools"
+        Aliases = @("docs-tools")
+      })
+  }
+
+  if (Test-ProjectAliasRepoScriptAvailable -RelativePath "..\Codex\Get-CodexStartupPrompt.ps1") {
+    [void]$definitions.Add([pscustomobject]@{
+        Id = "codex-tools"
+        FunctionName = "Invoke-CodexTools"
+        Aliases = @("codex-tools")
+      })
+
+    [void]$definitions.Add([pscustomobject]@{
+        Id = "codex-prompt"
+        FunctionName = "Invoke-CodexPrompt"
+        Aliases = @("codex-prompt")
       })
   }
 
@@ -342,6 +368,124 @@ function Invoke-ArtTools {
   & $artScript @argsList
 }
 
+function Invoke-DocsTools {
+  $argsList = @($args)
+
+  $repoRoot = Get-RepoRootOrThrow -InvokerName "Invoke-DocsTools"
+  $docsScript = Resolve-RepoScriptOrThrow `
+    -RepoRoot $repoRoot `
+    -RelativePath "Scripts\Docs\DocsTools.ps1" `
+    -NotFoundMessagePrefix "Docs tools script not found"
+
+  & $docsScript -RepoRoot $repoRoot @argsList
+}
+
+function Show-CodexPromptHelp {
+  @(
+    "Codex startup prompt builder for this repository."
+    "Usage:"
+    "  codex-prompt [-Task <text>] [-IncludePrivate] [-CopyToClipboard]"
+    "Examples:"
+    "  codex-prompt"
+    "  codex-prompt -Task `"Fix UnrealSync regeneration tests`""
+    "  codex-prompt -Task `"Review Coding Standards docs`" -IncludePrivate -CopyToClipboard"
+    "Notes:"
+    "  - Runs Scripts\Codex\Get-CodexStartupPrompt.ps1."
+  ) | Write-Output
+}
+
+function Invoke-CodexPrompt {
+  $helpTokens = @("help", "--help", "-help", "-h", "/?", "-?")
+  $argsList = @($args)
+
+  foreach ($arg in $argsList) {
+    if ($helpTokens -contains ([string]$arg).ToLowerInvariant()) {
+      Show-CodexPromptHelp
+      return
+    }
+  }
+
+  $repoRoot = Get-RepoRootOrThrow -InvokerName "Invoke-CodexPrompt"
+  $promptScript = Resolve-RepoScriptOrThrow `
+    -RepoRoot $repoRoot `
+    -RelativePath "Scripts\Codex\Get-CodexStartupPrompt.ps1" `
+    -NotFoundMessagePrefix "Codex startup prompt script not found"
+
+  & $promptScript @argsList
+}
+
+function Invoke-CodexTools {
+  $helpTokens = @("help", "--help", "-help", "-h", "/?", "-?")
+  $argsList = @($args)
+
+  function Test-HelpToken([object]$Value) {
+    if ($null -eq $Value) { return $false }
+    $token = ([string]$Value).ToLowerInvariant()
+    return ($helpTokens -contains $token)
+  }
+
+  function Show-CodexToolsHelp {
+    @(
+      "Codex tools wrapper for repository Codex helpers."
+      "Usage:"
+      "  codex-tools <command> [options]"
+      "Commands:"
+      "  help                   Show this help text."
+      "  prompt [prompt args]   Run Scripts\Codex\Get-CodexStartupPrompt.ps1."
+      "Examples:"
+      "  codex-tools help"
+      "  codex-tools prompt -Task `"Fix hook docs`""
+      "  codex-tools prompt -IncludePrivate -CopyToClipboard"
+      "Notes:"
+      "  - If the first argument starts with '-' or '/', 'prompt' is assumed."
+    ) | Write-Output
+  }
+
+  $command = "help"
+  $commandArgs = @()
+
+  if ($argsList.Count -gt 0) {
+    $first = [string]$argsList[0]
+    if (Test-HelpToken $first) {
+      $command = "help"
+      if ($argsList.Count -gt 1) {
+        $commandArgs = @($argsList[1..($argsList.Count - 1)])
+      }
+    }
+    elseif ($first.StartsWith("-") -or $first.StartsWith("/")) {
+      $command = "prompt"
+      $commandArgs = $argsList
+    }
+    else {
+      $command = $first.ToLowerInvariant()
+      if ($argsList.Count -gt 1) {
+        $commandArgs = @($argsList[1..($argsList.Count - 1)])
+      }
+    }
+  }
+
+  switch ($command) {
+    "help" {
+      Show-CodexToolsHelp
+      return
+    }
+    "prompt" {
+      foreach ($arg in $commandArgs) {
+        if (Test-HelpToken $arg) {
+          Show-CodexPromptHelp
+          return
+        }
+      }
+
+      Invoke-CodexPrompt @commandArgs
+      return
+    }
+    default {
+      throw "Unknown codex-tools command '$command'. Run 'codex-tools help'."
+    }
+  }
+}
+
 function Register-ProjectShellAliases {
   $definitions = Get-ProjectAliasDefinitions
   $groups = @()
@@ -452,6 +596,44 @@ function Install-ArtToolsShellAliases {
 
   $result = Install-ProjectShellAliases -ProfilePath $ProfilePath -AliasScriptPath $AliasScriptPath
   $group = @($result.AliasGroups | Where-Object { $_.Id -eq "art-tools" } | Select-Object -First 1)
+
+  [pscustomobject]@{
+    ProfilePath = $result.ProfilePath
+    AliasScriptPath = $result.AliasScriptPath
+    FunctionName = if ($group.Count -gt 0) { $group[0].FunctionName } else { $null }
+    Aliases = if ($group.Count -gt 0) { @($group[0].Aliases) } else { @() }
+    StartMarker = $result.StartMarker
+    EndMarker = $result.EndMarker
+  }
+}
+
+function Install-DocsToolsShellAliases {
+  param(
+    [string]$ProfilePath,
+    [string]$AliasScriptPath
+  )
+
+  $result = Install-ProjectShellAliases -ProfilePath $ProfilePath -AliasScriptPath $AliasScriptPath
+  $group = @($result.AliasGroups | Where-Object { $_.Id -eq "docs-tools" } | Select-Object -First 1)
+
+  [pscustomobject]@{
+    ProfilePath = $result.ProfilePath
+    AliasScriptPath = $result.AliasScriptPath
+    FunctionName = if ($group.Count -gt 0) { $group[0].FunctionName } else { $null }
+    Aliases = if ($group.Count -gt 0) { @($group[0].Aliases) } else { @() }
+    StartMarker = $result.StartMarker
+    EndMarker = $result.EndMarker
+  }
+}
+
+function Install-CodexToolsShellAliases {
+  param(
+    [string]$ProfilePath,
+    [string]$AliasScriptPath
+  )
+
+  $result = Install-ProjectShellAliases -ProfilePath $ProfilePath -AliasScriptPath $AliasScriptPath
+  $group = @($result.AliasGroups | Where-Object { $_.Id -eq "codex-tools" } | Select-Object -First 1)
 
   [pscustomobject]@{
     ProfilePath = $result.ProfilePath

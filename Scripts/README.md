@@ -4,6 +4,8 @@ This folder contains automation that keeps Git/LFS/Unreal workflows consistent f
 
 ## Folder Responsibilities
 
+- `Scripts/Codex/`: Codex session helpers and prompt-building utilities.
+- `Scripts/Docs/`: Docusaurus authoring helpers and the optional VS Code bridge for docs automation.
 - `Scripts/git-hooks/`: shared hook utilities and setup scripts.
 - `Scripts/git-tools/`: conflict helper commands (`git ours`, `git theirs`, `git conflicts`).
 - `Scripts/Unreal/`: Unreal sync/build helper scripts and ArtSource scaffolding tools.
@@ -11,6 +13,8 @@ This folder contains automation that keeps Git/LFS/Unreal workflows consistent f
 
 Concrete examples:
 
+- `Scripts/Codex/Get-CodexStartupPrompt.ps1`
+- `Scripts/Docs/DocsTools.ps1`
 - `Scripts/git-hooks/Enable-GitHooks.ps1`
 - `Scripts/git-tools/conflicts.ps1`
 - `Scripts/Unreal/UnrealSync.ps1`
@@ -24,7 +28,9 @@ Concrete examples:
 - Use verb-based script names (`Enable-*`, `Sync-*`, `Test-*`).
 - Add/update tests in `Scripts/Tests` for behavior changes.
 - Document user-facing workflow changes in `Docs/Pipeline/README.md`.
+- Keep docs-site authoring helpers in `Scripts/Docs/` instead of mixing them into Unreal-only tooling folders.
 - Return non-zero exit code on script failure.
+- Prefer friendly command-line errors for end-user tools over raw PowerShell traces.
 
 ## Do Not
 
@@ -37,6 +43,7 @@ Concrete examples:
 
 Good:
 
+- `Scripts/Codex/Get-CodexStartupPrompt.ps1`
 - `Scripts/Unreal/Sync-ProjectAssets.ps1`
 - `Scripts/Tests/Test-PluginBootstrap.ps1`
 

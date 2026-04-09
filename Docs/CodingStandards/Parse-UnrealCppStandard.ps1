@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-  [string]$SnapshotPath,
+  [Alias("SnapshotPath")]
+  [string]$CurrentPath,
   [string]$OutputPath
 )
 
@@ -186,31 +187,37 @@ function Convert-ContentHtmlToMarkdown {
   return $text
 }
 
+function Get-SourceMetadataValue {
+  param(
+    [Parameter(Mandatory)][string]$SourceText,
+    [Parameter(Mandatory)][string]$Label
+  )
+
+  $pattern = "(?m)^\s*-\s*$([regex]::Escape($Label))\s*:\s*(.+?)\s*$"
+  if ($SourceText -notmatch $pattern) {
+    return $null
+  }
+
+  return $Matches[1].Trim()
+}
+
 $repoRoot = (git rev-parse --show-toplevel 2>$null).Trim()
 if (-not $repoRoot) { throw "Not inside a git repository." }
 
 $codingRoot = Join-Path $repoRoot "Docs/CodingStandards"
-$snapshotsRoot = Join-Path $codingRoot "Snapshots"
+$defaultCurrentPath = Join-Path $codingRoot "Current"
 
-if (-not $SnapshotPath) {
-  $latest = Get-ChildItem $snapshotsRoot -Directory |
-    Where-Object { $_.Name -ne ".gitkeep" } |
-    Sort-Object Name -Descending |
-    Select-Object -First 1
-  if (-not $latest) { throw "No snapshot folders found under $snapshotsRoot." }
-  $SnapshotPath = $latest.FullName
+if (-not $CurrentPath) {
+  $CurrentPath = $defaultCurrentPath
 }
 
-if (-not (Test-Path $SnapshotPath)) { throw "Snapshot path not found: $SnapshotPath" }
+if (-not (Test-Path $CurrentPath)) { throw "Current snapshot path not found: $CurrentPath" }
 
-$pagePath = Join-Path $SnapshotPath "page.html"
-if (-not (Test-Path $pagePath)) { throw "Snapshot page.html not found: $pagePath" }
-
-$generatedRoot = Join-Path $codingRoot "Generated"
-New-Item -ItemType Directory -Path $generatedRoot -Force | Out-Null
+$pagePath = Join-Path $CurrentPath "page.html"
+if (-not (Test-Path $pagePath)) { throw "Current snapshot page.html not found: $pagePath" }
 
 if (-not $OutputPath) {
-  $OutputPath = Join-Path $generatedRoot "UnrealCppStandard-Digest.md"
+  $OutputPath = Join-Path $codingRoot "UnrealCppStandard.md"
 }
 
 $rawPage = Get-Content $pagePath -Raw
@@ -223,26 +230,29 @@ $encoded = $contentMatch.Groups["content"].Value
 $contentHtml = ConvertFrom-Json ('"' + $encoded + '"')
 $bodyMd = Convert-ContentHtmlToMarkdown $contentHtml
 
-$snapshotName = Split-Path $SnapshotPath -Leaf
-$relativePagePath = [System.IO.Path]::GetRelativePath($repoRoot, $pagePath)
-$sourceMdPath = Join-Path $SnapshotPath "SOURCE.md"
-$sourceSummary = if (Test-Path $sourceMdPath) { (Get-Content $sourceMdPath -Raw).Trim() } else { "_SOURCE.md not found in snapshot._" }
+$sourceMdPath = Join-Path $CurrentPath "SOURCE.md"
+if (-not (Test-Path $sourceMdPath)) {
+  throw "Current snapshot metadata file not found: $sourceMdPath"
+}
+
+$sourceText = (Get-Content $sourceMdPath -Raw).Trim()
+$engineVersion = Get-SourceMetadataValue -SourceText $sourceText -Label "Engine version context"
+if ([string]::IsNullOrWhiteSpace($engineVersion)) {
+  throw "Engine version context is missing from $sourceMdPath"
+}
+
+$title = "Unreal C++ Coding Standard ($engineVersion)"
+$frontMatter = @(
+  "---"
+  "title: $title"
+  "slug: /coding-standards/unreal-cpp-standard"
+  "sidebar_position: 1"
+  "---"
+  ""
+)
 
 $sb = New-Object System.Text.StringBuilder
-[void]$sb.AppendLine("# Unreal C++ Coding Standard (Parsed Snapshot)")
-[void]$sb.AppendLine("")
-[void]$sb.AppendLine("## Snapshot")
-[void]$sb.AppendLine("")
-[void]$sb.AppendLine("- Snapshot folder: $snapshotName")
-[void]$sb.AppendLine("- Snapshot page: $relativePagePath")
-[void]$sb.AppendLine("- Generated at: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')")
-[void]$sb.AppendLine("")
-[void]$sb.AppendLine("## Source Metadata")
-[void]$sb.AppendLine("")
-[void]$sb.AppendLine($sourceSummary)
-[void]$sb.AppendLine("")
-[void]$sb.AppendLine("## Parsed Content")
-[void]$sb.AppendLine("")
+[void]$sb.AppendLine(($frontMatter -join "`n"))
 [void]$sb.AppendLine($bodyMd)
 
 Set-Content -Path $OutputPath -Value $sb.ToString() -Encoding UTF8
@@ -251,6 +261,6 @@ $h2Count = ([regex]::Matches($contentHtml, '(?is)<h2\b')).Count
 $h3Count = ([regex]::Matches($contentHtml, '(?is)<h3\b')).Count
 $preCount = ([regex]::Matches($contentHtml, '(?is)<pre\b')).Count
 
-Write-Host "[CodingStandards] Parsed snapshot -> markdown:"
+Write-Host "[CodingStandards] Parsed current snapshot -> docs page:"
 Write-Host "  $OutputPath"
 Write-Host "[CodingStandards] Source blocks: h2=$h2Count h3=$h3Count pre=$preCount"
