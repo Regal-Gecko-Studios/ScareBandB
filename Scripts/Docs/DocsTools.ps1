@@ -1,9 +1,11 @@
 [CmdletBinding()]
 param(
-  [Parameter(ValueFromRemainingArguments = $true, Position = 0)]
+  [string]$RepoRoot,
+
   [string[]]$CommandArgs,
 
-  [string]$RepoRoot
+  [Parameter(ValueFromRemainingArguments = $true)]
+  [string[]]$ExtraArgs
 )
 
 $ErrorActionPreference = "Stop"
@@ -97,7 +99,7 @@ function Get-NormalizedArgumentList {
     $normalized.Add($stringValue) | Out-Null
   }
 
-  return @($normalized)
+  return $normalized.ToArray()
 }
 
 function Test-ProcessRunning {
@@ -216,12 +218,13 @@ Usage:
 
 Create:
   new-section, create-section   Create a docs section
-  new-page, create-page         Create a page inside a section
+  new-page, create-page         Create a page at Docs root or inside a section
+  reorder                       Reorder a page or section and shift sibling positions
 
 Run:
-  start                         Start Docusaurus in the background
-  stop                          Stop the tracked Docusaurus server
-  status                        Show tracked server status
+  start                         Start Docusaurus in the current terminal
+  stop                          Stop the tracked background Docusaurus server
+  status                        Show tracked background server status
   check                         Validate docs and run the production build
   doctor                        Check local docs prerequisites
 
@@ -237,8 +240,11 @@ Other:
 Examples:
   docs-tools help new-section
   docs-tools create-section DocsSite -LinkType generated-index -GeneratedIndexSlug /docs-site
+  docs-tools create-page Setup -Title "Setup"
   docs-tools create-page GameDesign Fear-Loop -Title "Fear Loop" -SidebarLabel "Fear Loop"
+  docs-tools reorder Art-Source 4
   docs-tools start --port 3001
+  docs-tools start --background --port 3001
   docs-tools docusaurus docs:version 1.0.0 --skip-feedback
 
 Notes:
@@ -267,11 +273,12 @@ docs-tools new-page
 Alias: docs-tools create-page
 
 Usage:
+  docs-tools new-page <PageName> [options]
   docs-tools new-page <SectionPath> <PageName> [options]
 
 Required:
-  <SectionPath>                 Existing Docs/ section path, for example GameDesign
-  <PageName>                    File stem source, for example Fear-Loop
+  <PageName>                    File stem source, for example Setup or Fear-Loop
+  <SectionPath>                 Optional existing Docs/ section path, for example GameDesign
 
 Scaffold:
   -Title <text>                 Front matter title
@@ -311,6 +318,7 @@ Generic front matter passthrough:
                                 Arrays/objects/bools/numbers should use -FieldJson
 
 Examples:
+  docs-tools create-page Setup -Title "Setup"
   docs-tools create-page GameDesign Fear-Loop -Title "Fear Loop" -Position 2
   docs-tools create-page DocsSite Cli-Guide -Slug /docs-site/cli-guide -Keywords docs,cli,docusaurus
   docs-tools create-page GameDesign Panic-Curve -FieldJson last_update={\"date\":\"2026-04-08\",\"author\":\"Ron\"}
@@ -398,9 +406,43 @@ Examples:
 docs-tools start
 
 Usage:
-  docs-tools start [docusaurus start args]
+  docs-tools start [--background] [docusaurus start args]
 
-Runs `npm run start -- <args...>` in website/ as a background process and tracks the server for `status` and `stop`.
+Default behavior runs `npm run start -- <args...>` in website/ attached to the current terminal so stdout/stderr stream live.
+
+Options:
+  --background                  Run detached and track the server for `status` and `stop`
+
+Examples:
+  docs-tools start
+  docs-tools start --port 3001
+  docs-tools start --background --port 3001
+"@
+      return
+    }
+    "reorder" {
+@"
+docs-tools reorder
+
+Usage:
+  docs-tools reorder <TargetPath> <Position>
+
+Required:
+  <TargetPath>                  Docs-relative page or section path
+                                Pages: Setup, Art-Source, GameDesign/Fear-Loop
+                                Sections: GameDesign, DocsSite
+                                `Docs\` prefixes and `.md` suffixes are accepted
+  <Position>                    Target sidebar position number
+
+Behavior:
+  - Moves the target item to the requested position within its parent
+  - Shifts sibling pages/sections in the same parent container to keep ordering stable
+  - Updates `sidebar_position` for pages and `_category_.json` `position` for sections
+
+Examples:
+  docs-tools reorder Art-Source 4
+  docs-tools reorder GameDesign 3
+  docs-tools reorder GameDesign/Fear-Loop 2
 "@
       return
     }
@@ -429,7 +471,7 @@ Validates docs metadata, catches common docs-site mistakes, and runs the Docusau
 @"
 docs-tools status
 
-Shows whether the tracked docs dev server is running and prints the URL/log paths when state exists.
+Shows whether the tracked background docs dev server is running and prints the URL/log paths when state exists.
 "@
       return
     }
@@ -437,7 +479,7 @@ Shows whether the tracked docs dev server is running and prints the URL/log path
 @"
 docs-tools stop
 
-Stops the tracked docs dev server process tree and removes its saved state.
+Stops the tracked background docs dev server process tree and removes its saved state.
 "@
       return
     }
@@ -556,23 +598,28 @@ function Get-SlugForSectionPath {
 
 function Get-SlugForPage {
   param(
-    [Parameter(Mandatory)][string]$SectionPath,
+    [AllowEmptyString()][string]$SectionPath,
     [Parameter(Mandatory)][string]$PageName
   )
 
-  $sectionSlug = Get-SlugForSectionPath -SectionPath $SectionPath
   $pageSlug = ConvertTo-KebabCase $PageName
+  if ([string]::IsNullOrWhiteSpace($SectionPath)) {
+    return "/$pageSlug"
+  }
+
+  $sectionSlug = Get-SlugForSectionPath -SectionPath $SectionPath
   return "$sectionSlug/$pageSlug"
 }
 
 function Parse-SubcommandArguments {
   param(
-    [Parameter(Mandatory)][string[]]$Args,
+    [AllowNull()][string[]]$CommandArguments = @(),
     [string[]]$SwitchNames = @(),
     [string[]]$ValueNames = @(),
     [string[]]$MultiValueNames = @()
   )
 
+  $argumentList = @($CommandArguments)
   $positionals = New-Object System.Collections.Generic.List[string]
   $values = @{}
   $multiValues = @{}
@@ -581,8 +628,8 @@ function Parse-SubcommandArguments {
   $valueSet = @($ValueNames | ForEach-Object { $_.ToLowerInvariant() })
   $multiValueSet = @($MultiValueNames | ForEach-Object { $_.ToLowerInvariant() })
 
-  for ($i = 0; $i -lt $Args.Count; $i++) {
-    $token = [string]$Args[$i]
+  for ($i = 0; $i -lt $argumentList.Count; $i++) {
+    $token = [string]$argumentList[$i]
     if ($token.StartsWith('-')) {
       $name = $token.TrimStart('-').ToLowerInvariant()
 
@@ -592,17 +639,17 @@ function Parse-SubcommandArguments {
       }
 
       if ($valueSet -contains $name) {
-        if (($i + 1) -ge $Args.Count) {
+        if (($i + 1) -ge $argumentList.Count) {
           throw "Missing value for option '$token'."
         }
 
-        $values[$name] = [string]$Args[$i + 1]
+        $values[$name] = [string]$argumentList[$i + 1]
         $i++
         continue
       }
 
       if ($multiValueSet -contains $name) {
-        if (($i + 1) -ge $Args.Count) {
+        if (($i + 1) -ge $argumentList.Count) {
           throw "Missing value for option '$token'."
         }
 
@@ -610,7 +657,7 @@ function Parse-SubcommandArguments {
           $multiValues[$name] = New-Object System.Collections.Generic.List[string]
         }
 
-        $multiValues[$name].Add([string]$Args[$i + 1]) | Out-Null
+        $multiValues[$name].Add([string]$argumentList[$i + 1]) | Out-Null
         $i++
         continue
       }
@@ -622,7 +669,7 @@ function Parse-SubcommandArguments {
   }
 
   return [pscustomobject]@{
-    Positionals = @($positionals)
+    Positionals = $positionals.ToArray()
     Values = $values
     MultiValues = $multiValues
     Switches = $switches
@@ -1080,8 +1127,8 @@ function Test-DocsSectionExists {
     return $false
   }
 
-  $readmePath = Join-Path $SectionDir "README.md"
-  return (Test-Path -LiteralPath $readmePath -PathType Leaf)
+  $categoryPath = Join-Path $SectionDir "_category_.json"
+  return (Test-Path -LiteralPath $categoryPath -PathType Leaf)
 }
 
 function Get-CommonDocValueOptionNames {
@@ -1238,11 +1285,11 @@ function New-CategoryMetadata {
 function Invoke-NewSection {
   param(
     [Parameter(Mandatory)][string]$ResolvedRepoRoot,
-    [Parameter(Mandatory)][string[]]$Args
+    [string[]]$CommandArguments = @()
   )
 
   $parsed = Parse-SubcommandArguments `
-    -Args $Args `
+    -CommandArguments $CommandArguments `
     -SwitchNames @("force", "notoc") `
     -ValueNames @(
       "title", "label", "slug", "position", "docsidebarposition",
@@ -1257,8 +1304,12 @@ function Invoke-NewSection {
       "generatedindexdescription", "generatedindeximage", "generatedindexkeywords"
     ) `
     -MultiValueNames @("docfield", "docfieldjson", "categoryfield", "categoryjson")
-  if ($parsed.Positionals.Count -lt 1) {
-    throw "Usage: docs-tools new-section <SectionPath> [options]. Run 'docs-tools help new-section'."
+  if ($parsed.Positionals.Count -eq 0) {
+    throw "SectionPath is required. Usage: docs-tools new-section <SectionPath> [options]. Run 'docs-tools help new-section'."
+  }
+
+  if ($parsed.Positionals.Count -gt 1) {
+    throw "Too many positional arguments for new-section. Usage: docs-tools new-section <SectionPath> [options]. Run 'docs-tools help new-section'."
   }
 
   $sectionPath = $parsed.Positionals[0]
@@ -1356,35 +1407,48 @@ function Invoke-NewSection {
 function Invoke-NewPage {
   param(
     [Parameter(Mandatory)][string]$ResolvedRepoRoot,
-    [Parameter(Mandatory)][string[]]$Args
+    [string[]]$CommandArguments = @()
   )
 
   $parsed = Parse-SubcommandArguments `
-    -Args $Args `
+    -CommandArguments $CommandArguments `
     -SwitchNames @("force", "notoc") `
     -ValueNames (Get-CommonDocValueOptionNames) `
     -MultiValueNames @("field", "fieldjson")
-  if ($parsed.Positionals.Count -lt 2) {
-    throw "Usage: docs-tools new-page <SectionPath> <PageName> [options]. Run 'docs-tools help new-page'."
+  if ($parsed.Positionals.Count -eq 0) {
+    throw "PageName is required. Usage: docs-tools new-page <PageName> [options] or docs-tools new-page <SectionPath> <PageName> [options]. Run 'docs-tools help new-page'."
   }
 
-  $sectionPath = $parsed.Positionals[0]
-  $pageName = $parsed.Positionals[1]
+  if ($parsed.Positionals.Count -gt 2) {
+    throw "Too many positional arguments for new-page. Usage: docs-tools new-page <PageName> [options] or docs-tools new-page <SectionPath> <PageName> [options]. Run 'docs-tools help new-page'."
+  }
+
+  $sectionPath = $null
+  if ($parsed.Positionals.Count -eq 1) {
+    $pageName = $parsed.Positionals[0]
+  }
+  else {
+    $sectionPath = $parsed.Positionals[0]
+    $pageName = $parsed.Positionals[1]
+  }
   $title = if ($parsed.Values.ContainsKey("title")) { $parsed.Values["title"] } else { ConvertTo-TitleWords $pageName }
   $force = $parsed.Switches.ContainsKey("force")
   $noToc = $parsed.Switches.ContainsKey("notoc")
 
   $docsRoot = Get-DocsRoot -ResolvedRepoRoot $ResolvedRepoRoot
-  $sectionSegments = @($sectionPath -split '[\\/]' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-  if ($sectionSegments.Count -eq 0) {
-    throw "Section path must not be empty."
-  }
+  $sectionDir = $docsRoot
+  if (-not [string]::IsNullOrWhiteSpace($sectionPath)) {
+    $sectionSegments = @($sectionPath -split '[\\/]' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($sectionSegments.Count -eq 0) {
+      throw "Section path must not be empty."
+    }
 
-  $sectionDir = Join-Path $docsRoot ([System.IO.Path]::Combine($sectionSegments))
-  Assert-PathInsideRoot -RootPath $docsRoot -TargetPath $sectionDir
+    $sectionDir = Join-Path $docsRoot ([System.IO.Path]::Combine($sectionSegments))
+    Assert-PathInsideRoot -RootPath $docsRoot -TargetPath $sectionDir
 
-  if (-not (Test-DocsSectionExists -SectionDir $sectionDir)) {
-    throw "Section does not exist: $sectionDir"
+    if (-not (Test-DocsSectionExists -SectionDir $sectionDir)) {
+      throw "Section does not exist: $sectionDir"
+    }
   }
 
   $fileStem = ConvertTo-FileStem $pageName
@@ -1565,6 +1629,294 @@ function Get-NextPagePosition {
   return (ConvertTo-CompactNumericValue -Value ((($positions.ToArray() | Measure-Object -Maximum).Maximum) + 1))
 }
 
+function Normalize-DocsTargetPath {
+  param([Parameter(Mandatory)][string]$TargetPath)
+
+  $normalized = $TargetPath.Trim()
+  $normalized = $normalized -replace '^[\\/]+', ''
+  if ($normalized -match '^(?i:docs)[\\/](.+)$') {
+    $normalized = $Matches[1]
+  }
+
+  $normalized = ($normalized -replace '/', '\').Trim('\')
+  if ([string]::IsNullOrWhiteSpace($normalized)) {
+    throw "Target path must not be empty."
+  }
+
+  return $normalized
+}
+
+function Get-DocsItemRelativePath {
+  param(
+    [Parameter(Mandatory)][string]$DocsRoot,
+    [Parameter(Mandatory)][string]$ItemPath,
+    [Parameter(Mandatory)][string]$ItemType
+  )
+
+  if ($ItemType -eq "page") {
+    return (Get-RelativeDocPath -DocsRoot $DocsRoot -FullPath $ItemPath)
+  }
+
+  return ([System.IO.Path]::GetRelativePath($DocsRoot, $ItemPath) -replace '\\', '/')
+}
+
+function Resolve-DocsNavigationTarget {
+  param(
+    [Parameter(Mandatory)][string]$DocsRoot,
+    [Parameter(Mandatory)][string]$TargetPath
+  )
+
+  $normalized = Normalize-DocsTargetPath -TargetPath $TargetPath
+
+  $directoryCandidate = Join-Path $DocsRoot $normalized
+  Assert-PathInsideRoot -RootPath $DocsRoot -TargetPath $directoryCandidate
+  if (Test-DocsSectionExists -SectionDir $directoryCandidate) {
+    $position = Get-CategoryPositionForDirectory -DirectoryPath $directoryCandidate
+    if ($null -eq $position) {
+      throw "Target section does not have an explicit position: $(Get-DocsItemRelativePath -DocsRoot $DocsRoot -ItemPath $directoryCandidate -ItemType 'section')"
+    }
+
+    return [pscustomobject]@{
+      ItemType = "section"
+      FullPath = $directoryCandidate
+      ParentDir = (Split-Path -Parent $directoryCandidate)
+      RelativePath = (Get-DocsItemRelativePath -DocsRoot $DocsRoot -ItemPath $directoryCandidate -ItemType "section")
+      Position = $position
+    }
+  }
+
+  $fileRelativePath = $normalized
+  if (-not $fileRelativePath.EndsWith(".md", [System.StringComparison]::OrdinalIgnoreCase)) {
+    $fileRelativePath = "$fileRelativePath.md"
+  }
+
+  $fileCandidate = Join-Path $DocsRoot $fileRelativePath
+  Assert-PathInsideRoot -RootPath $DocsRoot -TargetPath $fileCandidate
+  if (-not (Test-Path -LiteralPath $fileCandidate -PathType Leaf)) {
+    throw "Docs page or section not found: $TargetPath"
+  }
+
+  $pagePosition = Get-SidebarPositionForMarkdownFile -FilePath $fileCandidate
+  if ($null -eq $pagePosition) {
+    throw "Target page does not have an explicit sidebar_position: $(Get-DocsItemRelativePath -DocsRoot $DocsRoot -ItemPath $fileCandidate -ItemType 'page')"
+  }
+
+  return [pscustomobject]@{
+    ItemType = "page"
+    FullPath = $fileCandidate
+    ParentDir = (Split-Path -Parent $fileCandidate)
+    RelativePath = (Get-DocsItemRelativePath -DocsRoot $DocsRoot -ItemPath $fileCandidate -ItemType "page")
+    Position = $pagePosition
+  }
+}
+
+function Get-DocsNavigationSiblings {
+  param(
+    [Parameter(Mandatory)][string]$DocsRoot,
+    [Parameter(Mandatory)][string]$ParentDir
+  )
+
+  $siblings = New-Object System.Collections.Generic.List[object]
+
+  foreach ($markdownFile in @(Get-ChildItem -LiteralPath $ParentDir -File -Filter *.md -ErrorAction SilentlyContinue)) {
+    $position = Get-SidebarPositionForMarkdownFile -FilePath $markdownFile.FullName
+    if ($null -eq $position) {
+      continue
+    }
+
+    $siblings.Add([pscustomobject]@{
+        ItemType = "page"
+        FullPath = $markdownFile.FullName
+        ParentDir = $ParentDir
+        RelativePath = (Get-DocsItemRelativePath -DocsRoot $DocsRoot -ItemPath $markdownFile.FullName -ItemType "page")
+        Position = $position
+      }) | Out-Null
+  }
+
+  foreach ($childDir in @(Get-ChildItem -LiteralPath $ParentDir -Directory -ErrorAction SilentlyContinue)) {
+    if (-not (Test-DocsSectionExists -SectionDir $childDir.FullName)) {
+      continue
+    }
+
+    $position = Get-CategoryPositionForDirectory -DirectoryPath $childDir.FullName
+    if ($null -eq $position) {
+      continue
+    }
+
+    $siblings.Add([pscustomobject]@{
+        ItemType = "section"
+        FullPath = $childDir.FullName
+        ParentDir = $ParentDir
+        RelativePath = (Get-DocsItemRelativePath -DocsRoot $DocsRoot -ItemPath $childDir.FullName -ItemType "section")
+        Position = $position
+      }) | Out-Null
+  }
+
+  return @($siblings | Sort-Object Position, RelativePath)
+}
+
+function Set-SidebarPositionForMarkdownFile {
+  param(
+    [Parameter(Mandatory)][string]$FilePath,
+    [Parameter(Mandatory)]$Position
+  )
+
+  $content = Get-Content -LiteralPath $FilePath -Raw
+  $newline = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
+  $formattedPosition = Format-YamlNumber -Value (ConvertTo-CompactNumericValue -Value ([double]$Position))
+
+  $match = [regex]::Match($content, '(?s)\A---\s*\r?\n(?<frontMatter>.*?)\r?\n---(?<rest>(?:\r?\n|$).*)\z')
+  if (-not $match.Success) {
+    $newContent = @(
+      '---'
+      "sidebar_position: $formattedPosition"
+      '---'
+      ''
+      $content.TrimStart("`r", "`n")
+    ) -join $newline
+    Write-Utf8NoBomFile -Path $FilePath -Content $newContent
+    return
+  }
+
+  $frontMatter = $match.Groups['frontMatter'].Value
+  $rest = $match.Groups['rest'].Value
+
+  if ($frontMatter -match '(?m)^\s*sidebar_position\s*:') {
+    $updatedFrontMatter = [regex]::Replace($frontMatter, '(?m)^\s*sidebar_position\s*:\s*.+$', "sidebar_position: $formattedPosition", 1)
+  }
+  else {
+    $updatedFrontMatter = $frontMatter.TrimEnd() + $newline + "sidebar_position: $formattedPosition"
+  }
+
+  $newContent = "---$newline$updatedFrontMatter$newline---$rest"
+  Write-Utf8NoBomFile -Path $FilePath -Content $newContent
+}
+
+function Set-CategoryPositionForDirectory {
+  param(
+    [Parameter(Mandatory)][string]$DirectoryPath,
+    [Parameter(Mandatory)]$Position
+  )
+
+  $categoryPath = Join-Path $DirectoryPath "_category_.json"
+  if (-not (Test-Path -LiteralPath $categoryPath -PathType Leaf)) {
+    throw "Section category metadata not found: $categoryPath"
+  }
+
+  $categoryJson = Get-Content -LiteralPath $categoryPath -Raw | ConvertFrom-Json
+  $categoryJson.position = (ConvertTo-CompactNumericValue -Value ([double]$Position))
+  $content = ($categoryJson | ConvertTo-Json -Depth 20) + "`r`n"
+  Write-Utf8NoBomFile -Path $categoryPath -Content $content
+}
+
+function Set-DocsNavigationItemPosition {
+  param(
+    [Parameter(Mandatory)][pscustomobject]$Item,
+    [Parameter(Mandatory)]$Position
+  )
+
+  if ($Item.ItemType -eq "page") {
+    Set-SidebarPositionForMarkdownFile -FilePath $Item.FullPath -Position $Position
+    return
+  }
+
+  Set-CategoryPositionForDirectory -DirectoryPath $Item.FullPath -Position $Position
+}
+
+function Invoke-DocsReorder {
+  param(
+    [Parameter(Mandatory)][string]$ResolvedRepoRoot,
+    [string[]]$CommandArguments = @()
+  )
+
+  $argumentList = @($CommandArguments)
+  if ($argumentList.Count -eq 0) {
+    throw "TargetPath is required. Usage: docs-tools reorder <TargetPath> <Position>. Run 'docs-tools help reorder'."
+  }
+
+  if ($argumentList.Count -eq 1) {
+    throw "Position is required. Usage: docs-tools reorder <TargetPath> <Position>. Run 'docs-tools help reorder'."
+  }
+
+  if ($argumentList.Count -gt 2) {
+    throw "Too many positional arguments for reorder. Usage: docs-tools reorder <TargetPath> <Position>. Run 'docs-tools help reorder'."
+  }
+
+  $docsRoot = Get-DocsRoot -ResolvedRepoRoot $ResolvedRepoRoot
+  $target = Resolve-DocsNavigationTarget -DocsRoot $docsRoot -TargetPath $argumentList[0]
+  $desiredPosition = ConvertTo-NumericValue -Value $argumentList[1] -OptionName "Position"
+  if ([double]$desiredPosition -lt 1) {
+    throw "Position must be 1 or greater."
+  }
+
+  $siblings = @(Get-DocsNavigationSiblings -DocsRoot $docsRoot -ParentDir $target.ParentDir)
+  if ($siblings.Count -eq 0) {
+    throw "No positioned sibling items were found under '$($target.ParentDir)'."
+  }
+
+  $maxPosition = [double](($siblings | Measure-Object -Property Position -Maximum).Maximum)
+  if ([double]$desiredPosition -gt $maxPosition) {
+    $desiredPosition = (ConvertTo-CompactNumericValue -Value $maxPosition)
+  }
+
+  $currentPosition = [double]$target.Position
+  $desiredPositionNumber = [double]$desiredPosition
+  if ([Math]::Abs($currentPosition - $desiredPositionNumber) -lt 0.0000001) {
+    return [pscustomobject]@{
+      Command = "reorder"
+      Target = $target.RelativePath
+      OldPosition = $target.Position
+      NewPosition = $desiredPosition
+      UpdatedCount = 0
+    }
+  }
+
+  $changedItems = New-Object System.Collections.Generic.List[object]
+  foreach ($sibling in $siblings) {
+    $siblingPath = [System.IO.Path]::GetFullPath($sibling.FullPath)
+    $targetPath = [System.IO.Path]::GetFullPath($target.FullPath)
+    if ($siblingPath.Equals($targetPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+      continue
+    }
+
+    $siblingPosition = [double]$sibling.Position
+    $newSiblingPosition = $null
+    if ($desiredPositionNumber -lt $currentPosition) {
+      if ($siblingPosition -ge $desiredPositionNumber -and $siblingPosition -lt $currentPosition) {
+        $newSiblingPosition = (ConvertTo-CompactNumericValue -Value ($siblingPosition + 1))
+      }
+    }
+    else {
+      if ($siblingPosition -le $desiredPositionNumber -and $siblingPosition -gt $currentPosition) {
+        $newSiblingPosition = (ConvertTo-CompactNumericValue -Value ($siblingPosition - 1))
+      }
+    }
+
+    if ($null -ne $newSiblingPosition) {
+      Set-DocsNavigationItemPosition -Item $sibling -Position $newSiblingPosition
+      $changedItems.Add([pscustomobject]@{
+          RelativePath = $sibling.RelativePath
+          Position = $newSiblingPosition
+        }) | Out-Null
+    }
+  }
+
+  Set-DocsNavigationItemPosition -Item $target -Position $desiredPosition
+  $changedItems.Add([pscustomobject]@{
+      RelativePath = $target.RelativePath
+      Position = $desiredPosition
+    }) | Out-Null
+
+  return [pscustomobject]@{
+    Command = "reorder"
+    Target = $target.RelativePath
+    OldPosition = $target.Position
+    NewPosition = $desiredPosition
+    UpdatedCount = $changedItems.Count
+    UpdatedItems = @($changedItems | Sort-Object RelativePath)
+  }
+}
+
 function Invoke-DocsCheck {
   param([Parameter(Mandatory)][string]$ResolvedRepoRoot)
 
@@ -1684,7 +2036,59 @@ function Get-DocsStartUrl {
   return "http://localhost:$port/docs/"
 }
 
-function Invoke-DocsStart {
+function Split-DocsStartArguments {
+  param([string[]]$StartArgsInput = @())
+
+  $background = $false
+  $passThroughArgs = New-Object System.Collections.Generic.List[string]
+  foreach ($token in @(Get-NormalizedArgumentList -Values $StartArgsInput)) {
+    $normalized = [string]$token
+    if ($normalized -in @("--background", "-background")) {
+      $background = $true
+      continue
+    }
+
+    $passThroughArgs.Add($normalized) | Out-Null
+  }
+
+  return [pscustomobject]@{
+    Background = $background
+    StartArgs = $passThroughArgs.ToArray()
+  }
+}
+
+function Invoke-DocsStartForeground {
+  param(
+    [Parameter(Mandatory)][string]$ResolvedRepoRoot,
+    [string[]]$StartArgs = @()
+  )
+
+  $normalizedStartArgs = @(Get-NormalizedArgumentList -Values $StartArgs)
+  $url = Get-DocsStartUrl -StartArgs $normalizedStartArgs
+  $websiteRoot = Get-WebsiteRoot -ResolvedRepoRoot $ResolvedRepoRoot
+
+  Write-Output "Starting docs dev server in the current terminal."
+  Write-Output "URL: $url"
+
+  Push-Location $websiteRoot
+  try {
+    $npmArgs = @("run", "start")
+    if ($normalizedStartArgs.Count -gt 0) {
+      $npmArgs += "--"
+      $npmArgs += $normalizedStartArgs
+    }
+
+    & npm @npmArgs
+    if ($LASTEXITCODE -ne 0) {
+      throw "npm run start failed (exit $LASTEXITCODE)."
+    }
+  }
+  finally {
+    Pop-Location
+  }
+}
+
+function Invoke-DocsStartBackground {
   param(
     [Parameter(Mandatory)][string]$ResolvedRepoRoot,
     [string[]]$StartArgs = @()
@@ -1764,7 +2168,7 @@ function Invoke-DocsStart {
   $statePath = Save-DocsServerState -ResolvedRepoRoot $ResolvedRepoRoot -State $state
 
   return [pscustomobject]@{
-    Command = "start"
+    Command = "start-background"
     AlreadyRunning = $false
     ProcessId = $trackedProcessId
     RootProcessId = $process.Id
@@ -1943,10 +2347,10 @@ function Invoke-InstallBridge {
 function Invoke-DocsToolsMain {
   param(
     [Parameter(Mandatory)][string]$ResolvedRepoRoot,
-    [string[]]$Args
+    [string[]]$CommandArguments
   )
 
-  $allArgs = @(Get-NormalizedArgumentList -Values $Args)
+  $allArgs = @(Get-NormalizedArgumentList -Values $CommandArguments)
   $helpTokens = @("help", "--help", "-help", "-h", "/?", "-?")
   if ($allArgs.Count -eq 0) {
     Write-Output (Get-DocsToolsRootHelp)
@@ -1977,7 +2381,12 @@ function Invoke-DocsToolsMain {
 
   switch ($command) {
     "new-section" {
-      $result = Invoke-NewSection -ResolvedRepoRoot $ResolvedRepoRoot -Args $remaining
+      $newSectionParameters = @{ ResolvedRepoRoot = $ResolvedRepoRoot }
+      if ($remaining.Count -gt 0) {
+        $newSectionParameters.CommandArguments = @($remaining)
+      }
+
+      $result = Invoke-NewSection @newSectionParameters
       Write-Output "Created section: $($result.Path)"
       Write-Output "Category metadata: $($result.CategoryPath)"
       if ($result.TocQueued) { Write-Output "TOC request queued through the VS Code bridge." }
@@ -1985,15 +2394,42 @@ function Invoke-DocsToolsMain {
       return
     }
     "new-page" {
-      $result = Invoke-NewPage -ResolvedRepoRoot $ResolvedRepoRoot -Args $remaining
+      $newPageParameters = @{ ResolvedRepoRoot = $ResolvedRepoRoot }
+      if ($remaining.Count -gt 0) {
+        $newPageParameters.CommandArguments = @($remaining)
+      }
+
+      $result = Invoke-NewPage @newPageParameters
       Write-Output "Created page: $($result.Path)"
       if ($result.TocQueued) { Write-Output "TOC request queued through the VS Code bridge." }
       else { Write-Output "TOC generation skipped." }
       return
     }
+    "reorder" {
+      $reorderParameters = @{ ResolvedRepoRoot = $ResolvedRepoRoot }
+      if ($remaining.Count -gt 0) {
+        $reorderParameters.CommandArguments = @($remaining)
+      }
+
+      $result = Invoke-DocsReorder @reorderParameters
+      if ($result.UpdatedCount -eq 0) {
+        Write-Output "No reorder needed. '$($result.Target)' is already at position $($result.NewPosition)."
+      }
+      else {
+        Write-Output "Reordered '$($result.Target)' from $($result.OldPosition) to $($result.NewPosition)."
+        Write-Output "Updated items: $($result.UpdatedCount)"
+      }
+      return
+    }
     "preview" {
-      Write-Output "preview is deprecated. Use 'docs-tools start'."
-      $result = Invoke-DocsStart -ResolvedRepoRoot $ResolvedRepoRoot -StartArgs $remaining
+      Write-Output "preview is deprecated. Use 'docs-tools start' or 'docs-tools start --background'."
+      if ($remaining.Count -gt 0) {
+        $previewMode = Split-DocsStartArguments -StartArgsInput $remaining
+      }
+      else {
+        $previewMode = Split-DocsStartArguments
+      }
+      $result = Invoke-DocsStartBackground -ResolvedRepoRoot $ResolvedRepoRoot -StartArgs $previewMode.StartArgs
       if ($result.AlreadyRunning) {
         Write-Output "Docs dev server is already running (PID $($result.ProcessId))."
       }
@@ -2006,39 +2442,50 @@ function Invoke-DocsToolsMain {
       return
     }
     "start" {
-      $result = Invoke-DocsStart -ResolvedRepoRoot $ResolvedRepoRoot -StartArgs $remaining
-      if ($result.AlreadyRunning) {
-        Write-Output "Docs dev server is already running (PID $($result.ProcessId))."
+      if ($remaining.Count -gt 0) {
+        $startMode = Split-DocsStartArguments -StartArgsInput $remaining
       }
       else {
-        Write-Output "Started docs dev server in the background (PID $($result.ProcessId))."
+        $startMode = Split-DocsStartArguments
       }
-      Write-Output "URL: $($result.Url)"
-      Write-Output "Stdout log: $($result.LogPath)"
-      Write-Output "Stderr log: $($result.ErrorLogPath)"
+      if ($startMode.Background) {
+        $result = Invoke-DocsStartBackground -ResolvedRepoRoot $ResolvedRepoRoot -StartArgs $startMode.StartArgs
+        if ($result.AlreadyRunning) {
+          Write-Output "Docs dev server is already running (PID $($result.ProcessId))."
+        }
+        else {
+          Write-Output "Started docs dev server in the background (PID $($result.ProcessId))."
+        }
+        Write-Output "URL: $($result.Url)"
+        Write-Output "Stdout log: $($result.LogPath)"
+        Write-Output "Stderr log: $($result.ErrorLogPath)"
+        return
+      }
+
+      Invoke-DocsStartForeground -ResolvedRepoRoot $ResolvedRepoRoot -StartArgs $startMode.StartArgs
       return
     }
     "stop" {
       $result = Invoke-DocsStop -ResolvedRepoRoot $ResolvedRepoRoot
       switch ($result.Status) {
-        "not_running" { Write-Output "Docs dev server is not running." }
-        "stale_state_removed" { Write-Output "Removed stale docs dev server state for PID $($result.ProcessId)." }
-        default { Write-Output "Stopped docs dev server (PID $($result.ProcessId))." }
+        "not_running" { Write-Output "Tracked background docs dev server is not running." }
+        "stale_state_removed" { Write-Output "Removed stale background docs dev server state for PID $($result.ProcessId)." }
+        default { Write-Output "Stopped background docs dev server (PID $($result.ProcessId))." }
       }
       return
     }
     "status" {
       $result = Invoke-DocsStatus -ResolvedRepoRoot $ResolvedRepoRoot
       switch ($result.Status) {
-        "not_running" { Write-Output "Docs dev server is not running." }
+        "not_running" { Write-Output "Tracked background docs dev server is not running." }
         "stale_state" {
-          Write-Output "Docs dev server is not running, but stale state still exists for PID $($result.ProcessId)."
+          Write-Output "Background docs dev server is not running, but stale state still exists for PID $($result.ProcessId)."
           Write-Output "URL: $($result.Url)"
           Write-Output "Stdout log: $($result.LogPath)"
           Write-Output "Stderr log: $($result.ErrorLogPath)"
         }
         default {
-          Write-Output "Docs dev server is running (PID $($result.ProcessId))."
+          Write-Output "Background docs dev server is running (PID $($result.ProcessId))."
           Write-Output "URL: $($result.Url)"
           Write-Output "Started: $($result.StartedAt)"
           Write-Output "Stdout log: $($result.LogPath)"
@@ -2066,15 +2513,15 @@ function Invoke-DocsToolsMain {
       Write-Output "Markdown All in One installed: $($result.MarkdownAllInOneInstalled)"
       Write-Output "Docs bridge installed: $($result.BridgeInstalled)"
       Write-Output "TOC automation ready: $($result.TocReady)"
-      Write-Output "Docs dev server status: $($result.ServerStatus)"
+      Write-Output "Background docs dev server status: $($result.ServerStatus)"
       if ($result.ServerUrl) {
-        Write-Output "Docs dev server URL: $($result.ServerUrl)"
+        Write-Output "Background docs dev server URL: $($result.ServerUrl)"
       }
       if ($result.ServerLogPath) {
-        Write-Output "Docs dev server stdout log: $($result.ServerLogPath)"
+        Write-Output "Background docs dev server stdout log: $($result.ServerLogPath)"
       }
       if ($result.ServerErrorLogPath) {
-        Write-Output "Docs dev server stderr log: $($result.ServerErrorLogPath)"
+        Write-Output "Background docs dev server stderr log: $($result.ServerErrorLogPath)"
       }
       return
     }
@@ -2093,7 +2540,12 @@ function Invoke-DocsToolsMain {
     default {
       $packageScripts = @(Get-WebsitePackageScriptNames -ResolvedRepoRoot $ResolvedRepoRoot)
       if ($packageScripts -contains $command) {
-        Invoke-WebsiteNpmScript -ResolvedRepoRoot $ResolvedRepoRoot -ScriptName $command -ScriptArgs $remaining
+        if ($remaining.Count -gt 0) {
+          Invoke-WebsiteNpmScript -ResolvedRepoRoot $ResolvedRepoRoot -ScriptName $command -ScriptArgs $remaining
+        }
+        else {
+          Invoke-WebsiteNpmScript -ResolvedRepoRoot $ResolvedRepoRoot -ScriptName $command
+        }
         return
       }
 
@@ -2102,11 +2554,24 @@ function Invoke-DocsToolsMain {
   }
 }
 
-try {
-  $resolvedRepoRoot = Get-DocsToolsRepoRoot -ExplicitRepoRoot $RepoRoot
-  Invoke-DocsToolsMain -ResolvedRepoRoot $resolvedRepoRoot -Args $CommandArgs
-}
-catch {
-  Write-DocsToolsError -Message $_.Exception.Message
-  exit 1
+if ($MyInvocation.InvocationName -ne '.') {
+  try {
+    $resolvedRepoRoot = Get-DocsToolsRepoRoot -ExplicitRepoRoot $RepoRoot
+    $effectiveCommandArgs = New-Object System.Collections.Generic.List[string]
+    foreach ($argument in @($CommandArgs)) {
+      $effectiveCommandArgs.Add([string]$argument) | Out-Null
+    }
+    foreach ($argument in @($ExtraArgs)) {
+      $effectiveCommandArgs.Add([string]$argument) | Out-Null
+    }
+    foreach ($argument in @($MyInvocation.UnboundArguments)) {
+      $effectiveCommandArgs.Add([string]$argument) | Out-Null
+    }
+
+    Invoke-DocsToolsMain -ResolvedRepoRoot $resolvedRepoRoot -CommandArguments $effectiveCommandArgs.ToArray()
+  }
+  catch {
+    Write-DocsToolsError -Message $_.Exception.Message
+    exit 1
+  }
 }
