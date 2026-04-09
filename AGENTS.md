@@ -16,10 +16,11 @@ Scope: this file applies to the entire repository.
 
 - Scrutinize `Docs/CodingStandards/` thoroughly before C++ or style-sensitive work.
 - Use `Docs/CodingStandards/README.md` as the operating guide for the coding-standards snapshot workflow.
-- Check the latest snapshot date under `Docs/CodingStandards/Snapshots/`.
-- If the latest coding-standard snapshot is older than six months, rerun:
+- Use `Docs/CodingStandards/UnrealCppStandard.md` as the readable in-repo coding standard reference.
+- Check `Docs/CodingStandards/Current/SOURCE.md` for the current snapshot date.
+- If the current coding-standard snapshot is older than six months, rerun:
   `pwsh -File Docs/CodingStandards/Sync-UnrealCppStandard.ps1`
-  and then regenerate the digest per `Docs/CodingStandards/README.md` before treating the local standard reference as current.
+  and then regenerate `Docs/CodingStandards/UnrealCppStandard.md` per `Docs/CodingStandards/README.md` before treating the local standard reference as current.
 
 ## Repo Rules
 

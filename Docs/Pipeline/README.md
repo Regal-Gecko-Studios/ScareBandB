@@ -40,7 +40,7 @@ Only start work when the output is clean or intentionally understood.
 - Run the relevant script tests before changing hook or automation behavior.
 - Use `docs-tools new-section` and `docs-tools new-page` for routine docs scaffolding.
 - Run `docs-tools check` before merging docs-structure or docs-site workflow changes.
-- Preview docs locally when editing navigation or structure-heavy pages with `docs-tools preview`.
+- Preview docs locally when editing navigation or structure-heavy pages with `docs-tools start`.
 
 ## Do Not
 

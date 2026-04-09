@@ -1,12 +1,11 @@
 import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
-import { type } from '@generated/site-storage';
 
 const config: Config = {
   title: 'ScareBandB Docs',
   tagline: 'Repo tooling, Unreal workflow, and living project documentation.',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/logo.svg',
 
   future: {
     v4: true,
@@ -37,7 +36,7 @@ const config: Config = {
           path: '../Docs',
           routeBasePath: 'docs',
           sidebarPath: './sidebars.ts',
-          exclude: ['**/Snapshots/**', '**/Templates/**'],
+          exclude: ['**/Current/**', '**/Templates/**'],
         },
         blog: false,
         theme: {
@@ -70,7 +69,7 @@ const config: Config = {
         {
           to: '/docs/',
           position: 'left',
-          label: 'Handbook',
+          label: 'Overview',
         },
         {
           type: 'doc',
@@ -96,32 +95,36 @@ const config: Config = {
       style: 'dark',
       links: [
         {
-          title: 'Build',
+          title: 'Start',
           items: [
             {
               label: 'Overview',
               to: '/docs/',
             },
             {
-              label: 'Setup',
-              to: '/docs/setup',
-            },
-            {
-              label: 'Workflow',
-              to: '/docs/workflow',
-            },
-          ],
-        },
-        {
-          title: 'Design',
-          items: [
-            {
               label: 'Game Design',
               to: '/docs/game-design/overview',
             },
             {
+              label: 'Setup',
+              to: '/docs/setup',
+            },
+          ],
+        },
+        {
+          title: 'Build',
+          items: [
+            {
+              label: 'Workflow',
+              to: '/docs/workflow',
+            },
+            {
               label: 'Project Structure',
               to: '/docs/project-structure',
+            },
+            {
+              label: 'Testing',
+              to: '/docs/testing',
             },
           ],
         },
@@ -129,25 +132,13 @@ const config: Config = {
           title: 'Reference',
           items: [
             {
-              label: 'Testing',
-              to: '/docs/testing',
-            },
-            {
               label: 'Coding Standards',
               to: '/docs/coding-standards',
-            },
-            {
-              label: 'Docs Site',
-              to: '/docs/docs-site',
-            },
-            {
-              label: 'Codex Context',
-              to: '/docs/codex-context',
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} ScareBandB. Built with Docusaurus.`,
+      copyright: `ScareBandB documentation for the current project state. ${new Date().getFullYear()}.`,
     },
     prism: {
       theme: prismThemes.github,

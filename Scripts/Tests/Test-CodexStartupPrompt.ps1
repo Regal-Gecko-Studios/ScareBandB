@@ -109,7 +109,7 @@ try {
   Assert-TextContains "case1 includes docs overview" $defaultPrompt "Docs/README.md"
   Assert-TextContains "case1 includes Coding Standards readme" $defaultPrompt "Docs/CodingStandards/README.md"
   Assert-TextContains "case1 includes Scripts readme" $defaultPrompt "Scripts/README.md"
-  Assert-TextContains "case1 includes snapshot line" $defaultPrompt "Current latest Unreal C++ standard snapshot:"
+  Assert-TextContains "case1 includes snapshot line" $defaultPrompt "Current Unreal C++ standard snapshot:"
   Assert-TextContains "case1 includes coding standards scrutiny note" $defaultPrompt "If this task touches C++ or style-sensitive code, scrutinize Docs/CodingStandards/README.md"
   Assert-TextNotContains "case1 excludes private context by default" $defaultPrompt ".codex-local/Private-Context.md"
 

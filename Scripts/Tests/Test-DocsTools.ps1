@@ -291,12 +291,20 @@ try {
   $helpToolset = New-StubToolset -Name "toolset-help"
   $helpResult = Invoke-DocsToolsCommand -ScratchRepoRoot $helpRepo -CliArgs @("help") -Toolset $helpToolset -SandboxRoot (New-ScratchPath "sandbox-help")
   Assert-Condition "case1 help exits cleanly" ($helpResult.ExitCode -eq 0) "exit code=0" "exit code=$($helpResult.ExitCode)"
-  Assert-TextContains "case1 help shows new-section" $helpResult.OutputText "docs-tools new-section <SectionPath>"
-  Assert-TextContains "case1 help shows new-page" $helpResult.OutputText "docs-tools new-page <SectionPath> <PageName>"
-  Assert-TextContains "case1 help shows start" $helpResult.OutputText "docs-tools start [docusaurus-start args]"
-  Assert-TextContains "case1 help shows stop" $helpResult.OutputText "docs-tools stop"
-  Assert-TextContains "case1 help shows docusaurus passthrough" $helpResult.OutputText "docs-tools docusaurus <args...>"
-  Assert-TextContains "case1 help shows install-bridge" $helpResult.OutputText "docs-tools install-bridge"
+  Assert-TextContains "case1 help shows header" $helpResult.OutputText "ScareBandB docs automation."
+  Assert-TextContains "case1 help shows section alias" $helpResult.OutputText "new-section, create-section"
+  Assert-TextContains "case1 help shows page alias" $helpResult.OutputText "new-page, create-page"
+  Assert-TextContains "case1 help shows start" $helpResult.OutputText "start"
+  Assert-TextContains "case1 help shows docusaurus passthrough" $helpResult.OutputText "docusaurus <args...>"
+  Assert-TextContains "case1 help shows help syntax" $helpResult.OutputText "help [command]"
+
+  Step "Case 1b: detailed help shows Docusaurus metadata options"
+  $helpSectionResult = Invoke-DocsToolsCommand -ScratchRepoRoot $helpRepo -CliArgs @("help", "new-section") -Toolset $helpToolset -SandboxRoot (New-ScratchPath "sandbox-help-new-section")
+  Assert-Condition "case1b detailed help exits cleanly" ($helpSectionResult.ExitCode -eq 0) "exit code=0" "exit code=$($helpSectionResult.ExitCode)"
+  Assert-TextContains "case1b help shows generated-index" $helpSectionResult.OutputText "-LinkType <doc|generated-index|none>"
+  Assert-TextContains "case1b help shows generated index slug" $helpSectionResult.OutputText "-GeneratedIndexSlug <path>"
+  Assert-TextContains "case1b help shows category json" $helpSectionResult.OutputText "-CategoryJson <key=json>"
+  Assert-TextContains "case1b help shows detailed syntax" $helpSectionResult.OutputText "docs-tools new-section <SectionPath> [options]"
 
   Step "Case 2: new-section scaffolds a section and skips TOC without the bridge"
   $noTocRepo = New-MinimalDocsRepo -Name "repo-no-toc"
@@ -333,6 +341,28 @@ try {
   Assert-Condition "case2b new-section exits cleanly" ($autoSectionResult.ExitCode -eq 0) "exit code=0" "exit code=$($autoSectionResult.ExitCode)"
   Assert-TextContains "case2b default section position increments" $autoSectionCategoryText '"position": 2'
 
+  Step "Case 2c: create-section supports generated-index and category passthrough metadata"
+  $generatedSectionRepo = New-MinimalDocsRepo -Name "repo-generated-section"
+  $generatedSectionToolset = New-StubToolset -Name "toolset-generated-section"
+  $generatedSectionResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $generatedSectionRepo `
+    -CliArgs @(
+      "create-section", "DocsSite",
+      "-LinkType", "generated-index",
+      "-GeneratedIndexTitle", "Docs Site",
+      "-GeneratedIndexSlug", "/docs-site",
+      "-GeneratedIndexDescription", "Docs guidance",
+      "-CategoryJson", 'customProps={"badge":"internal"}'
+    ) `
+    -Toolset $generatedSectionToolset `
+    -SandboxRoot (New-ScratchPath "sandbox-generated-section")
+  $generatedSectionCategoryText = Get-Content -LiteralPath (Join-Path $generatedSectionRepo "Docs\DocsSite\_category_.json") -Raw
+  Assert-Condition "case2c create-section exits cleanly" ($generatedSectionResult.ExitCode -eq 0) "exit code=0" "exit code=$($generatedSectionResult.ExitCode)"
+  Assert-TextContains "case2c generated index type" $generatedSectionCategoryText '"type": "generated-index"'
+  Assert-TextContains "case2c generated index slug" $generatedSectionCategoryText '"slug": "/docs-site"'
+  Assert-TextContains "case2c generated index description" $generatedSectionCategoryText '"description": "Docs guidance"'
+  Assert-TextContains "case2c category custom props" $generatedSectionCategoryText '"badge": "internal"'
+
   Step "Case 3: new-page scaffolds a page and skips TOC without the bridge"
   $newPageResult = Invoke-DocsToolsCommand `
     -ScratchRepoRoot $noTocRepo `
@@ -358,6 +388,47 @@ try {
   Assert-Condition "case3b new-page exits cleanly" ($autoPageResult.ExitCode -eq 0) "exit code=0" "exit code=$($autoPageResult.ExitCode)"
   Assert-TextContains "case3b default page position increments" $autoPageText "sidebar_position: 3"
 
+  Step "Case 3d: create-page supports generic front matter passthrough"
+  $pageMetadataRepo = New-MinimalDocsRepo -Name "repo-page-metadata"
+  New-Item -ItemType Directory -Force -Path (Join-Path $pageMetadataRepo "Docs\GameDesign") | Out-Null
+  $pageMetadataSectionReadme = @'
+---
+title: Game Design
+slug: /game-design
+sidebar_position: 1
+---
+
+# Game Design
+'@
+  Write-Utf8NoBomFile -Path (Join-Path $pageMetadataRepo "Docs\GameDesign\README.md") -Content $pageMetadataSectionReadme
+  Write-Utf8NoBomFile -Path (Join-Path $pageMetadataRepo "Docs\GameDesign\_category_.json") -Content '{"label":"Game Design","position":2,"link":{"type":"doc","id":"GameDesign/README"}}'
+  $pageMetadataToolset = New-StubToolset -Name "toolset-page-metadata"
+  $pageMetadataResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $pageMetadataRepo `
+    -CliArgs @(
+      "create-page", "GameDesign", "Panic-Curve",
+      "-Description", "Curve notes",
+      "-Field", "foo=bar",
+      "-FieldJson", 'custom_edit_url=null'
+    ) `
+    -Toolset $pageMetadataToolset `
+    -SandboxRoot (New-ScratchPath "sandbox-page-metadata")
+  $pageMetadataText = Get-Content -LiteralPath (Join-Path $pageMetadataRepo "Docs\GameDesign\Panic-Curve.md") -Raw
+  Assert-Condition "case3d create-page exits cleanly" ($pageMetadataResult.ExitCode -eq 0) "exit code=0" "exit code=$($pageMetadataResult.ExitCode)"
+  Assert-TextContains "case3d front matter description" $pageMetadataText "description: 'Curve notes'"
+  Assert-TextContains "case3d front matter custom string field" $pageMetadataText "foo: bar"
+  Assert-TextContains "case3d front matter json field" $pageMetadataText "custom_edit_url: null"
+
+  Step "Case 3c: new-page fails cleanly when the target section does not exist"
+  $missingSectionResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $noTocRepo `
+    -CliArgs @("new-page", "MissingSection", "Ghost-Notes") `
+    -Toolset $noTocToolset `
+    -SandboxRoot (New-ScratchPath "sandbox-missing-section")
+  Assert-Condition "case3c new-page fails for missing section" ($missingSectionResult.ExitCode -ne 0) "exit code=$($missingSectionResult.ExitCode)" "expected non-zero exit code"
+  Assert-TextContains "case3c output is user-friendly" $missingSectionResult.OutputText "Error: Section does not exist:"
+  Assert-TextNotContains "case3c output hides stack traces" $missingSectionResult.OutputText "DocsTools.ps1:"
+
   Step "Case 4: install-bridge copies the optional VS Code bridge"
   $bridgeToolset = New-StubToolset -Name "toolset-install-bridge" -CodeExtensions @("yzhang.markdown-all-in-one")
   $bridgeRepo = New-MinimalDocsRepo -Name "repo-install-bridge"
@@ -373,13 +444,13 @@ try {
   Assert-Condition "case4 bridge code copied" (Test-Path -LiteralPath (Join-Path $bridgeInstallPath "extension.js")) "extension.js copied"
   Assert-TextContains "case4 output mentions markdown extension" $installBridgeResult.OutputText "Markdown All in One is already installed."
 
-  Step "Case 5: start launches a background server and stop kills it"
+  Step "Case 5: start launches a background server with default args, status reports it, and stop kills it"
   $startStopRepo = New-MinimalDocsRepo -Name "repo-start-stop"
   $startStopToolset = New-StubToolset -Name "toolset-start-stop"
   $startStopSandbox = New-ScratchPath "sandbox-start-stop"
   $startResult = Invoke-DocsToolsCommand `
     -ScratchRepoRoot $startStopRepo `
-    -CliArgs @("start", "--port", "3001") `
+    -CliArgs @("start") `
     -Toolset $startStopToolset `
     -SandboxRoot $startStopSandbox `
     -ExtraEnv @{ STUB_NPM_START_MODE = "sleep" }
@@ -388,9 +459,19 @@ try {
   $startStubLog = Get-Content -LiteralPath $startStopToolset.CommandLog -Raw
   Assert-Condition "case5 start exits cleanly" ($startResult.ExitCode -eq 0) "exit code=0" "exit code=$($startResult.ExitCode)"
   Assert-TextContains "case5 output confirms background start" $startResult.OutputText "Started docs dev server in the background"
-  Assert-TextContains "case5 output includes custom port url" $startResult.OutputText "http://localhost:3001/docs/"
+  Assert-TextContains "case5 output includes default port url" $startResult.OutputText "http://localhost:3000/docs/"
   Assert-Condition "case5 server state file created" ($serverStateFiles.Count -eq 1) "docs-server.json created"
-  Assert-TextContains "case5 npm start was invoked" $startStubLog "npm run start -- --port 3001"
+  Assert-TextContains "case5 npm start was invoked" $startStubLog "npm run start"
+  $statusResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $startStopRepo `
+    -CliArgs @("status") `
+    -Toolset $startStopToolset `
+    -SandboxRoot $startStopSandbox
+  Assert-Condition "case5 status exits cleanly" ($statusResult.ExitCode -eq 0) "exit code=0" "exit code=$($statusResult.ExitCode)"
+  Assert-Condition "case5 status reports a handled server state" (
+    $statusResult.OutputText.Contains("Docs dev server is running") -or
+    $statusResult.OutputText.Contains("stale state still exists")
+  ) "status command reported a handled server state"
   $stopResult = Invoke-DocsToolsCommand `
     -ScratchRepoRoot $startStopRepo `
     -CliArgs @("stop") `
@@ -404,7 +485,7 @@ try {
   Assert-Condition "case5 state file removed after stop" (-not (Test-Path -LiteralPath $serverStateFiles[0].FullName)) "docs-server.json removed"
   Assert-Condition "case5 server pid stopped" (-not (Get-Process -Id $serverState.processId -ErrorAction SilentlyContinue)) "process $($serverState.processId) stopped"
 
-  Step "Case 6: docs-tools can invoke other website package scripts"
+  Step "Case 6: docs-tools can invoke other website package scripts with passthrough flags"
   $scriptRepo = New-MinimalDocsRepo -Name "repo-script-passthrough"
   $scriptToolset = New-StubToolset -Name "toolset-script-passthrough"
   $scriptResult = Invoke-DocsToolsCommand `
@@ -416,9 +497,31 @@ try {
   Assert-Condition "case6 passthrough command exits cleanly" ($scriptResult.ExitCode -eq 0) "exit code=0" "exit code=$($scriptResult.ExitCode)"
   Assert-TextContains "case6 npm script was invoked" $scriptStubLog "npm run write-heading-ids -- --dry-run"
 
+  Step "Case 6b: docs-tools docusaurus passes raw args and flags through"
+  $docusaurusRepo = New-MinimalDocsRepo -Name "repo-docusaurus-passthrough"
+  $docusaurusToolset = New-StubToolset -Name "toolset-docusaurus-passthrough"
+  $docusaurusResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $docusaurusRepo `
+    -CliArgs @("docusaurus", "docs:version", "1.0.0", "--skip-feedback") `
+    -Toolset $docusaurusToolset `
+    -SandboxRoot (New-ScratchPath "sandbox-docusaurus-passthrough")
+  $docusaurusStubLog = Get-Content -LiteralPath $docusaurusToolset.CommandLog -Raw
+  Assert-Condition "case6b docusaurus passthrough exits cleanly" ($docusaurusResult.ExitCode -eq 0) "exit code=0" "exit code=$($docusaurusResult.ExitCode)"
+  Assert-TextContains "case6b npm docusaurus script was invoked" $docusaurusStubLog "npm run docusaurus -- docs:version 1.0.0 --skip-feedback"
+
   Step "Case 7: new-page queues a TOC request when the optional bridge is available"
   $tocRepo = New-MinimalDocsRepo -Name "repo-toc"
   New-Item -ItemType Directory -Force -Path (Join-Path $tocRepo "Docs\GameDesign") | Out-Null
+  $tocSectionReadme = @'
+---
+title: Game Design
+slug: /game-design
+sidebar_position: 1
+---
+
+# Game Design
+'@
+  Write-Utf8NoBomFile -Path (Join-Path $tocRepo "Docs\GameDesign\README.md") -Content $tocSectionReadme
   $tocToolset = New-StubToolset -Name "toolset-toc" -CodeExtensions @(
     "yzhang.markdown-all-in-one",
     "rim28.scarebandb-docs-tools-bridge"
@@ -436,7 +539,8 @@ try {
   Assert-TextContains "case7 output confirms queued toc" $tocResult.OutputText "TOC request queued through the VS Code bridge."
   Assert-TextContains "case7 page contains toc marker" $tocPageText "<!-- docs-tools-toc -->"
   Assert-Condition "case7 request json created" ($tocRequestFiles.Count -ge 1) "request file count=$($tocRequestFiles.Count)" "expected a queued request file"
-  Assert-TextContains "case7 code cli was asked to open repo" $stubLogText "code --reuse-window"
+  Assert-TextContains "case7 code cli was asked to open file" $stubLogText "code --reuse-window -g"
+  Assert-TextNotContains "case7 code cli was not asked to open the repo root" $stubLogText ("code --reuse-window {0}" -f $tocRepo)
 
   Step "Case 8: check validates docs and runs the Docusaurus build"
   $checkRepo = New-MinimalDocsRepo -Name "repo-check-pass"

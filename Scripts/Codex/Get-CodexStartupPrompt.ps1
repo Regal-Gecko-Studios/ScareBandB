@@ -79,45 +79,40 @@ function Get-RepoMarkdownPaths {
 function Get-CodingStandardsSnapshotInfo {
   param([Parameter(Mandatory)][string]$ResolvedRepoRoot)
 
-  $snapshotsRoot = Join-Path $ResolvedRepoRoot "Docs\CodingStandards\Snapshots"
-  if (-not (Test-Path -LiteralPath $snapshotsRoot)) {
+  $currentSnapshotRoot = Join-Path $ResolvedRepoRoot "Docs\CodingStandards\Current"
+  $sourcePath = Join-Path $currentSnapshotRoot "SOURCE.md"
+
+  if (-not (Test-Path -LiteralPath $currentSnapshotRoot)) {
     return [pscustomobject]@{
       Exists = $false
-      Name = $null
+      Path = $null
       SnapshotDate = $null
       IsStale = $false
+      HasValidDate = $false
     }
   }
 
-  $candidates = New-Object System.Collections.Generic.List[object]
-  foreach ($dir in @(Get-ChildItem -LiteralPath $snapshotsRoot -Directory)) {
-    if ($dir.Name -match '^(?<date>\d{4}-\d{2}-\d{2})-epic-cpp-standard$') {
+  $snapshotDate = $null
+  $hasValidDate = $false
+  if (Test-Path -LiteralPath $sourcePath) {
+    $sourceText = Get-Content -LiteralPath $sourcePath -Raw
+    if ($sourceText -match '(?m)^\s*-\s*Snapshot date:\s*(?<date>\d{4}-\d{2}-\d{2})\s*$') {
       $snapshotDate = [datetime]::ParseExact($Matches.date, "yyyy-MM-dd", [System.Globalization.CultureInfo]::InvariantCulture)
-      $candidates.Add([pscustomobject]@{
-          Name = $dir.Name
-          SnapshotDate = $snapshotDate
-        }) | Out-Null
+      $hasValidDate = $true
     }
   }
 
-  $latest = @($candidates | Sort-Object SnapshotDate -Descending | Select-Object -First 1)
-  if ($latest.Count -eq 0) {
-    return [pscustomobject]@{
-      Exists = $false
-      Name = $null
-      SnapshotDate = $null
-      IsStale = $false
-    }
+  $isStale = $false
+  if ($hasValidDate) {
+    $isStale = $snapshotDate.Date.AddMonths(6) -lt (Get-Date).Date
   }
-
-  $snapshotDate = $latest[0].SnapshotDate
-  $isStale = $snapshotDate.Date.AddMonths(6) -lt (Get-Date).Date
 
   return [pscustomobject]@{
     Exists = $true
-    Name = $latest[0].Name
+    Path = "Docs/CodingStandards/Current"
     SnapshotDate = $snapshotDate
     IsStale = $isStale
+    HasValidDate = $hasValidDate
   }
 }
 
@@ -147,19 +142,28 @@ foreach ($relativePath in $repoMarkdownPaths) {
 $lines.Add("") | Out-Null
 
 if ($snapshotInfo.Exists) {
-  $lines.Add(("Current latest Unreal C++ standard snapshot: Docs/CodingStandards/Snapshots/{0} ({1:yyyy-MM-dd})." -f $snapshotInfo.Name, $snapshotInfo.SnapshotDate)) | Out-Null
-  if ($snapshotInfo.IsStale) {
-    $lines.Add("It is older than six months. Refresh it with `pwsh -File Docs/CodingStandards/Sync-UnrealCppStandard.ps1` before treating the local standard reference as current.") | Out-Null
+  if ($snapshotInfo.HasValidDate) {
+    $lines.Add(("Current Unreal C++ standard snapshot: {0} ({1:yyyy-MM-dd})." -f $snapshotInfo.Path, $snapshotInfo.SnapshotDate)) | Out-Null
   }
   else {
+    $lines.Add(("Current Unreal C++ standard snapshot: {0} (snapshot date missing from SOURCE.md)." -f $snapshotInfo.Path)) | Out-Null
+  }
+
+  if ($snapshotInfo.HasValidDate -and $snapshotInfo.IsStale) {
+    $lines.Add("It is older than six months. Refresh it with `pwsh -File Docs/CodingStandards/Sync-UnrealCppStandard.ps1` before treating the local standard reference as current.") | Out-Null
+  }
+  elseif ($snapshotInfo.HasValidDate) {
     $lines.Add("It is not older than six months.") | Out-Null
+  }
+  else {
+    $lines.Add("Refresh SOURCE.md and re-run `pwsh -File Docs/CodingStandards/Sync-UnrealCppStandard.ps1` before treating the local standard reference as current.") | Out-Null
   }
 }
 else {
-  $lines.Add("No local Unreal C++ standard snapshot was found under Docs/CodingStandards/Snapshots/.") | Out-Null
+  $lines.Add("No local Unreal C++ standard snapshot was found under Docs/CodingStandards/Current/.") | Out-Null
 }
 
-$lines.Add("If this task touches C++ or style-sensitive code, scrutinize Docs/CodingStandards/README.md and the latest snapshot folder first.") | Out-Null
+$lines.Add("If this task touches C++ or style-sensitive code, scrutinize Docs/CodingStandards/README.md, Docs/CodingStandards/UnrealCppStandard.md, and Docs/CodingStandards/Current/SOURCE.md first.") | Out-Null
 
 if (-not [string]::IsNullOrWhiteSpace($Task)) {
   $lines.Add("") | Out-Null

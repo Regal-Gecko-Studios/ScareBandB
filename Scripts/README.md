@@ -30,6 +30,7 @@ Concrete examples:
 - Document user-facing workflow changes in `Docs/Pipeline/README.md`.
 - Keep docs-site authoring helpers in `Scripts/Docs/` instead of mixing them into Unreal-only tooling folders.
 - Return non-zero exit code on script failure.
+- Prefer friendly command-line errors for end-user tools over raw PowerShell traces.
 
 ## Do Not
 

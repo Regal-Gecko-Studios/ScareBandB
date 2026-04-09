@@ -1,5 +1,6 @@
 import type {ReactNode} from 'react';
 import Link from '@docusaurus/Link';
+import useBaseUrl from '@docusaurus/useBaseUrl';
 import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
 
@@ -54,12 +55,6 @@ const sectionCards = [
     to: '/docs/coding-standards',
     badge: 'Code',
   },
-  {
-    title: 'Docs Site',
-    body: 'How the docs site works without turning it into another infrastructure rabbit hole.',
-    to: '/docs/docs-site',
-    badge: 'Docs',
-  },
 ];
 
 const readOrder = [
@@ -78,11 +73,13 @@ const principles = [
 
 const metrics = [
   {value: '4', label: 'Ghost players'},
+  {value: '1', label: 'Haunted inn'},
   {value: 'UE 5.7', label: 'Engine target'},
-  {value: 'Repo-native', label: 'Source of truth'},
 ];
 
 export default function Home(): ReactNode {
+  const logoSrc = useBaseUrl('/img/logo.svg');
+
   return (
     <Layout
       title="ScareBandB Docs"
@@ -91,18 +88,21 @@ export default function Home(): ReactNode {
         <div className={styles.heroBackdrop} />
         <div className={styles.heroGrid}>
           <div className={styles.heroCopy}>
-            <p className={styles.eyebrow}>Co-op haunting project handbook</p>
+            <div className={styles.brandLockup}>
+              <img className={styles.brandMark} src={logoSrc} alt="ScareBandB ghost mark" />
+              <p className={styles.eyebrow}>Co-op haunting project overview</p>
+            </div>
             <Heading as="h1" className={styles.title}>
               ScareBandB
             </Heading>
             <p className={styles.subtitle}>
-              A cleaner, repo-native handbook for the ghost fantasy, gameplay
-              loop, Unreal workflow, and team rules that actually matter during
+              A lean project overview for the ghost fantasy, gameplay loop,
+              Unreal workflow, and the rules that actually matter during
               development.
             </p>
             <div className={styles.actions}>
               <Link className="button button--primary button--lg" to="/docs/">
-                Open Handbook
+                Open Overview
               </Link>
               <Link className={styles.ghostButton} to="/docs/game-design/overview">
                 Read Game Design
@@ -119,7 +119,7 @@ export default function Home(): ReactNode {
           </div>
           <aside className={styles.heroPanel}>
             <p className={styles.panelEyebrow}>Recommended Read Order</p>
-            <Heading as="h2">Start making the game, not wrestling the repo.</Heading>
+            <Heading as="h2">Start building the game, not wrestling the tooling.</Heading>
             <ol className={styles.readOrder}>
               {readOrder.map((item) => (
                 <li key={item.label}>
@@ -153,8 +153,8 @@ export default function Home(): ReactNode {
 
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
-            <p className={styles.sectionLabel}>Documentation Map</p>
-            <Heading as="h2">The parts of the site that should actually matter.</Heading>
+            <p className={styles.sectionLabel}>Core Sections</p>
+            <Heading as="h2">Keep the important pages close.</Heading>
           </div>
           <div className={styles.cardGrid}>
             {sectionCards.map((item) => (
@@ -190,8 +190,8 @@ export default function Home(): ReactNode {
             <Heading as="h2">Docs belong next to the work.</Heading>
             <p>
               ScareBandB does not need a sprawling wiki. It needs a readable
-              design reference, a trustworthy workflow, and enough structure to
-              help the team ship.
+              design reference, a trustworthy workflow, and enough structure
+              to help the team ship.
             </p>
             <div className={styles.actions}>
               <Link className="button button--primary button--lg" to="/docs/workflow">

@@ -1,23 +1,8 @@
-# Unreal C++ Coding Standard (Parsed Snapshot)
-
-## Snapshot
-
-- Snapshot folder: 2026-02-24-epic-cpp-standard
-- Snapshot page: Docs\CodingStandards\Snapshots\2026-02-24-epic-cpp-standard\page.html
-- Generated at: 2026-02-25 00:32:45
-
-## Source Metadata
-
-# Coding Standard Source Metadata
-
-- Snapshot date: 2026-02-24
-- Captured by: Ronald Bocchichio
-- Source URL: https://dev.epicgames.com/documentation/en-us/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine
-- Engine version context: UE 5.7
-- Capture method: `Sync-UnrealCppStandard.ps1`
-- Notes: Initial capture of cpp standard.
-
-## Parsed Content
+---
+title: Unreal C++ Coding Standard (UE 5.7)
+slug: /coding-standards/unreal-cpp-standard
+sidebar_position: 1
+---
 
 At Epic Games, we have a few simple coding standards and conventions. This document reflects the state of Epic Games' current coding standards. Following the coding standards is mandatory.
 
