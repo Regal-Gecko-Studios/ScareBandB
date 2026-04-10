@@ -66,17 +66,6 @@ Goal: add a script that validates plugin bootstrap setup.
 5. Update `Docs/Pipeline/README.md` if daily workflow changes.
 6. Commit script and test with explicit message.
 
-## Script Author Checklist
-
-```text
-[ ] Script placed in correct Scripts subfolder
-[ ] Script name is verb-based and specific
-[ ] Error handling returns non-zero on failure
-[ ] Test added or updated in Scripts/Tests
-[ ] Test output kept under Scripts/Tests/*Results
-[ ] Pipeline docs updated if user workflow changed
-```
-
 ## Test Output Hygiene
 
 Recommended layout:

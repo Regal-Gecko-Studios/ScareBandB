@@ -69,12 +69,3 @@ The master runner executes tests serially on purpose. Some tests create branches
 ## Manual Validation Helper
 
 Use `Scripts/Tests/Test-Setup-UESync-Manual.ps1` when you want a disposable branch that introduces a structural C++ change to manually exercise the `post-checkout` Unreal sync hook. Run it only from a clean working tree.
-
-## Test Hygiene Checklist
-
-```text
-[ ] Result folders stay untracked
-[ ] Tests that need a clean repo are not run against a dirty worktree
-[ ] Manual Unreal sync validation uses the helper branch script, not ad-hoc file edits
-[ ] Any script behavior change updates or adds a matching test
-```

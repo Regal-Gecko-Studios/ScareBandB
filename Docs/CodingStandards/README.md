@@ -78,17 +78,6 @@ Refresh coding-standard snapshot:
   3. Run `pwsh -File Docs/CodingStandards/Parse-UnrealCppStandard.ps1`
   4. Commit the refreshed current snapshot and `Docs/CodingStandards/UnrealCppStandard.md` in docs scope
 
-## Team Enforcement Checklist
-
-```text
-[ ] C++ files follow Unreal naming and style conventions
-[ ] New code matches Unreal macro and class patterns
-[ ] Current snapshot exists for the current standard reference date
-[ ] Docs/CodingStandards/Current/SOURCE.md is filled with URL/date/author details
-[ ] UnrealCppStandard.md regenerated from the current snapshot
-[ ] Coding standard updates were committed in docs-only scope
-```
-
 ## Concrete Usage Example
 
 Scenario: teammate introduces new class naming that is questioned in review.

@@ -84,14 +84,3 @@ Goal: add reusable house-systems plugin.
 5. Commit with explicit message:
    - `Add ScareHouseSystems project plugin scaffold`
 6. Update docs if plugin policy or workflow changed.
-
-## Plugin Change Checklist
-
-```text
-[ ] Plugin is in correct owner folder (Project or ThirdParty)
-[ ] .uplugin name matches plugin folder name
-[ ] Build and editor startup validated
-[ ] Vendor upgrades are isolated from gameplay changes
-[ ] Local vendor patches are documented (if any)
-[ ] Docs updated when plugin policy changed
-```
