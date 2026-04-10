@@ -39,8 +39,9 @@ Only start work when the output is clean or intentionally understood.
 - Use `git ours`, `git theirs`, and `git conflicts` for guarded binary conflict handling.
 - Run the relevant script tests before changing hook or automation behavior.
 - Use `docs-tools new-section` and `docs-tools new-page` for routine docs scaffolding.
+- Use `docs-tools reorder` instead of hand-editing multiple sibling positions when docs nav order changes.
 - Run `docs-tools check` before merging docs-structure or docs-site workflow changes.
-- Preview docs locally when editing navigation or structure-heavy pages with `docs-tools start`.
+- Preview docs locally when editing navigation or structure-heavy pages with `docs-tools start`, or `docs-tools start --background` when you want detached tracked mode.
 
 ## Do Not
 

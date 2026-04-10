@@ -30,11 +30,10 @@
   --ifm-blockquote-color: #2c2c2c;
   --docusaurus-highlighted-code-line-bg: rgba(159, 24, 43, 0.08);
   --sb-page-bg:
-    radial-gradient(circle at 12% 0%, rgba(159, 24, 43, 0.08), transparent 28rem),
-    radial-gradient(circle at 85% 8%, rgba(255, 255, 255, 0.48), transparent 20rem),
-    radial-gradient(circle at 50% 24%, rgba(159, 24, 43, 0.04), transparent 34rem),
-    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.018) 0, rgba(0, 0, 0, 0.018) 1px, transparent 1px, transparent 7rem),
-    linear-gradient(180deg, #f9f7f6 0%, #f2efee 100%);
+    radial-gradient(circle at 10% 4%, rgba(159, 24, 43, 0.12), transparent 30rem),
+    radial-gradient(circle at 84% 10%, rgba(255, 255, 255, 0.64), transparent 24rem),
+    radial-gradient(circle at 50% 120%, rgba(159, 24, 43, 0.05), transparent 40rem),
+    linear-gradient(135deg, #fbf9f8 0%, #f4efed 42%, #ece7e4 100%);
   --sb-surface-elevated: linear-gradient(180deg, #ffffff, #f7f5f4);
   --sb-border-strong: rgba(18, 18, 18, 0.1);
   --sb-text-muted: #4d4d4d;
@@ -64,12 +63,10 @@
   --ifm-blockquote-color: rgba(255, 255, 255, 0.76);
   --docusaurus-highlighted-code-line-bg: rgba(190, 49, 69, 0.14);
   --sb-page-bg:
-    radial-gradient(circle at 12% 0%, rgba(95, 11, 24, 0.42), transparent 32rem),
-    radial-gradient(circle at 86% 10%, rgba(255, 255, 255, 0.06), transparent 22rem),
-    radial-gradient(circle at 52% 22%, rgba(95, 11, 24, 0.18), transparent 42rem),
-    linear-gradient(120deg, rgba(255, 255, 255, 0.02) 0%, transparent 28%, transparent 72%, rgba(95, 11, 24, 0.06) 100%),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.018) 0, rgba(255, 255, 255, 0.018) 1px, transparent 1px, transparent 7rem),
-    linear-gradient(180deg, #040405 0%, #070709 52%, #0b0c0f 100%);
+    radial-gradient(circle at 14% 0%, rgba(118, 15, 32, 0.42), transparent 30rem),
+    radial-gradient(circle at 88% 12%, rgba(255, 255, 255, 0.08), transparent 18rem),
+    radial-gradient(circle at 52% 82%, rgba(82, 10, 23, 0.22), transparent 42rem),
+    linear-gradient(180deg, #1a0c13 0%, #120a11 24%, #0d0a0f 52%, #08080b 100%);
   --sb-surface-elevated:
     linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
     linear-gradient(180deg, #101011, #0b0b0c);
@@ -84,18 +81,13 @@ html {
 }
 
 html,
-body,
-#__docusaurus {
+body {
   background-color: var(--sb-page-base);
 }
 
 body {
   min-height: 100%;
   background-color: var(--sb-page-base);
-  background-image: var(--sb-page-bg);
-  background-attachment: fixed;
-  background-repeat: no-repeat;
-  background-size: cover;
 }
 
 body::before {
@@ -103,12 +95,22 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
+  background: var(--sb-page-bg);
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
   background:
-    radial-gradient(circle at 18% 14%, rgba(255, 255, 255, 0.035), transparent 18rem),
-    radial-gradient(circle at 82% 18%, rgba(159, 24, 43, 0.08), transparent 20rem),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18rem);
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.04), transparent 18rem),
+    radial-gradient(circle at 82% 18%, rgba(159, 24, 43, 0.1), transparent 20rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 24rem),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.18), transparent 20rem);
   mix-blend-mode: screen;
-  opacity: 0.45;
+  opacity: 0.52;
   z-index: 0;
 }
 
@@ -123,6 +125,8 @@ body::before {
 #__docusaurus {
   position: relative;
   z-index: 1;
+  min-height: 100vh;
+  background: transparent;
 }
 
 .navbar {

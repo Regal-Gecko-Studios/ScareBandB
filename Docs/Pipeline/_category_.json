@@ -1,6 +1,6 @@
 {
   "label": "Workflow",
-  "position": 5,
+  "position": 6,
   "link": {
     "type": "doc",
     "id": "Pipeline/README"

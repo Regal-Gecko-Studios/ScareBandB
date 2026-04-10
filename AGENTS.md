@@ -29,3 +29,4 @@ Scope: this file applies to the entire repository.
 - Some tests mutate branches or require a clean repo. Read `Docs/Testing.md` before running the full suite.
 - Avoid editing generated folders unless the task explicitly requires it: `Binaries/`, `DerivedDataCache/`, `Intermediate/`, `Saved/`, `website/.docusaurus/`, `website/build/`, `website/node_modules/`.
 - When changing workflow or tooling behavior, update the matching docs in `Docs/` in the same change.
+- Always check `.codex-local` for private codex context. Just skip if it doesn't exist.

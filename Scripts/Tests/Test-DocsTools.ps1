@@ -234,13 +234,28 @@ function Invoke-DocsToolsCommand {
       Set-Item -Path ("Env:{0}" -f $entry.Key) -Value ([string]$entry.Value)
     }
 
+    $escapedScriptPath = $script:DocsToolsScriptPath -replace "'", "''"
+    $escapedRepoRoot = $ScratchRepoRoot -replace "'", "''"
+    $escapedCliArgs = @($CliArgs | ForEach-Object { "'" + (("$($_)") -replace "'", "''") + "'" })
+    $commandText = @"
+`$cliArgs = @($($escapedCliArgs -join ', '))
+. '$escapedScriptPath'
+try {
+  `$resolvedRepoRoot = Get-DocsToolsRepoRoot -ExplicitRepoRoot '$escapedRepoRoot'
+  Invoke-DocsToolsMain -ResolvedRepoRoot `$resolvedRepoRoot -CommandArguments `$cliArgs
+}
+catch {
+  Write-DocsToolsError -Message `$_.Exception.Message
+  exit 1
+}
+"@
+
     $allArgs = @(
       "-NoLogo",
       "-NoProfile",
       "-ExecutionPolicy", "Bypass",
-      "-File", $script:DocsToolsScriptPath,
-      "-RepoRoot", $ScratchRepoRoot
-    ) + @($CliArgs)
+      "-Command", $commandText
+    )
 
     $output = @(& $pwshPath @allArgs 2>&1)
     $exitCode = $LASTEXITCODE
@@ -294,6 +309,7 @@ try {
   Assert-TextContains "case1 help shows header" $helpResult.OutputText "ScareBandB docs automation."
   Assert-TextContains "case1 help shows section alias" $helpResult.OutputText "new-section, create-section"
   Assert-TextContains "case1 help shows page alias" $helpResult.OutputText "new-page, create-page"
+  Assert-TextContains "case1 help shows reorder" $helpResult.OutputText "reorder"
   Assert-TextContains "case1 help shows start" $helpResult.OutputText "start"
   Assert-TextContains "case1 help shows docusaurus passthrough" $helpResult.OutputText "docusaurus <args...>"
   Assert-TextContains "case1 help shows help syntax" $helpResult.OutputText "help [command]"
@@ -305,6 +321,27 @@ try {
   Assert-TextContains "case1b help shows generated index slug" $helpSectionResult.OutputText "-GeneratedIndexSlug <path>"
   Assert-TextContains "case1b help shows category json" $helpSectionResult.OutputText "-CategoryJson <key=json>"
   Assert-TextContains "case1b help shows detailed syntax" $helpSectionResult.OutputText "docs-tools new-section <SectionPath> [options]"
+
+  Step "Case 1c: missing positional arguments return friendly command errors"
+  $friendlyErrorRepo = New-MinimalDocsRepo -Name "repo-friendly-errors"
+  $friendlyErrorToolset = New-StubToolset -Name "toolset-friendly-errors"
+  $reorderMissingTargetResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $friendlyErrorRepo `
+    -CliArgs @("reorder") `
+    -Toolset $friendlyErrorToolset `
+    -SandboxRoot (New-ScratchPath "sandbox-friendly-errors-reorder-target")
+  Assert-Condition "case1c reorder without target exits nonzero" ($reorderMissingTargetResult.ExitCode -ne 0) "nonzero exit code returned" "exit code=$($reorderMissingTargetResult.ExitCode)"
+  Assert-TextContains "case1c reorder without target names the missing parameter" $reorderMissingTargetResult.OutputText "Error: TargetPath is required."
+  Assert-TextNotContains "case1c reorder without target avoids binder noise" $reorderMissingTargetResult.OutputText "Cannot bind argument to parameter 'Args'"
+
+  $reorderMissingPositionResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $friendlyErrorRepo `
+    -CliArgs @("reorder", "Art-Source") `
+    -Toolset $friendlyErrorToolset `
+    -SandboxRoot (New-ScratchPath "sandbox-friendly-errors-reorder-position")
+  Assert-Condition "case1c reorder without position exits nonzero" ($reorderMissingPositionResult.ExitCode -ne 0) "nonzero exit code returned" "exit code=$($reorderMissingPositionResult.ExitCode)"
+  Assert-TextContains "case1c reorder without position names the missing parameter" $reorderMissingPositionResult.OutputText "Error: Position is required."
+  Assert-TextNotContains "case1c reorder without position avoids binder noise" $reorderMissingPositionResult.OutputText "Cannot bind argument to parameter 'Args'"
 
   Step "Case 2: new-section scaffolds a section and skips TOC without the bridge"
   $noTocRepo = New-MinimalDocsRepo -Name "repo-no-toc"
@@ -363,6 +400,115 @@ try {
   Assert-TextContains "case2c generated index description" $generatedSectionCategoryText '"description": "Docs guidance"'
   Assert-TextContains "case2c category custom props" $generatedSectionCategoryText '"badge": "internal"'
 
+  Step "Case 2d: reorder moves a top-level page and shifts sibling positions"
+  $reorderRepo = New-MinimalDocsRepo -Name "repo-reorder"
+  $reorderToolset = New-StubToolset -Name "toolset-reorder"
+  Write-Utf8NoBomFile -Path (Join-Path $reorderRepo "Docs\Setup.md") -Content @'
+---
+title: Setup
+slug: /setup
+sidebar_position: 2
+---
+
+# Setup
+'@
+  New-Item -ItemType Directory -Force -Path (Join-Path $reorderRepo "Docs\GameDesign") | Out-Null
+  Write-Utf8NoBomFile -Path (Join-Path $reorderRepo "Docs\GameDesign\README.md") -Content @'
+---
+title: Game Design
+slug: /game-design
+sidebar_position: 1
+---
+
+# Game Design
+'@
+  Write-Utf8NoBomFile -Path (Join-Path $reorderRepo "Docs\GameDesign\_category_.json") -Content @'
+{
+  "label": "Game Design",
+  "position": 3,
+  "link": {
+    "type": "doc",
+    "id": "GameDesign/README"
+  }
+}
+'@
+  Write-Utf8NoBomFile -Path (Join-Path $reorderRepo "Docs\Workflow.md") -Content @'
+---
+title: Workflow
+slug: /workflow
+sidebar_position: 4
+---
+
+# Workflow
+'@
+  Write-Utf8NoBomFile -Path (Join-Path $reorderRepo "Docs\Art-Source.md") -Content @'
+---
+title: Art Source
+slug: /art-source
+sidebar_position: 5
+---
+
+# Art Source
+'@
+  $reorderResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $reorderRepo `
+    -CliArgs @("reorder", "Art-Source", "3") `
+    -Toolset $reorderToolset `
+    -SandboxRoot (New-ScratchPath "sandbox-reorder")
+  $reorderedArtSource = Get-Content -LiteralPath (Join-Path $reorderRepo "Docs\Art-Source.md") -Raw
+  $reorderedSection = Get-Content -LiteralPath (Join-Path $reorderRepo "Docs\GameDesign\_category_.json") -Raw
+  $reorderedWorkflow = Get-Content -LiteralPath (Join-Path $reorderRepo "Docs\Workflow.md") -Raw
+  Assert-Condition "case2d reorder exits cleanly" ($reorderResult.ExitCode -eq 0) "exit code=0" "exit code=$($reorderResult.ExitCode)"
+  Assert-TextContains "case2d output confirms reorder" $reorderResult.OutputText "Reordered 'Art-Source.md' from 5 to 3."
+  Assert-TextContains "case2d art source moved to new position" $reorderedArtSource "sidebar_position: 3"
+  Assert-TextContains "case2d section shifted down" $reorderedSection '"position": 4'
+  Assert-TextContains "case2d workflow shifted down" $reorderedWorkflow "sidebar_position: 5"
+
+  Step "Case 2e: reorder supports generated-index sections without a README"
+  $generatedIndexReorderRepo = New-MinimalDocsRepo -Name "repo-generated-index-reorder"
+  $generatedIndexReorderToolset = New-StubToolset -Name "toolset-generated-index-reorder"
+  New-Item -ItemType Directory -Force -Path (Join-Path $generatedIndexReorderRepo "Docs\ProjectStructure") | Out-Null
+  Write-Utf8NoBomFile -Path (Join-Path $generatedIndexReorderRepo "Docs\ProjectStructure\_category_.json") -Content @'
+{
+  "label": "Project Structure",
+  "position": 3,
+  "link": {
+    "type": "generated-index",
+    "title": "Project Structure",
+    "slug": "/project-structure"
+  }
+}
+'@
+  Write-Utf8NoBomFile -Path (Join-Path $generatedIndexReorderRepo "Docs\ProjectStructure\Target-Structure.md") -Content @'
+---
+title: Target Structure
+slug: /project-structure/target-structure
+sidebar_position: 1
+---
+
+# Target Structure
+'@
+  Write-Utf8NoBomFile -Path (Join-Path $generatedIndexReorderRepo "Docs\Setup.md") -Content @'
+---
+title: Setup
+slug: /setup
+sidebar_position: 2
+---
+
+# Setup
+'@
+  $generatedIndexReorderResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $generatedIndexReorderRepo `
+    -CliArgs @("reorder", "ProjectStructure", "2") `
+    -Toolset $generatedIndexReorderToolset `
+    -SandboxRoot (New-ScratchPath "sandbox-generated-index-reorder")
+  $generatedIndexCategory = Get-Content -LiteralPath (Join-Path $generatedIndexReorderRepo "Docs\ProjectStructure\_category_.json") -Raw
+  $generatedIndexSetup = Get-Content -LiteralPath (Join-Path $generatedIndexReorderRepo "Docs\Setup.md") -Raw
+  Assert-Condition "case2e reorder exits cleanly" ($generatedIndexReorderResult.ExitCode -eq 0) "exit code=0" "exit code=$($generatedIndexReorderResult.ExitCode)"
+  Assert-TextContains "case2e output confirms generated-index section reorder" $generatedIndexReorderResult.OutputText "Reordered 'ProjectStructure' from 3 to 2."
+  Assert-TextContains "case2e generated-index section moved to new position" $generatedIndexCategory '"position": 2'
+  Assert-TextContains "case2e setup shifted down" $generatedIndexSetup "sidebar_position: 3"
+
   Step "Case 3: new-page scaffolds a page and skips TOC without the bridge"
   $newPageResult = Invoke-DocsToolsCommand `
     -ScratchRepoRoot $noTocRepo `
@@ -387,6 +533,22 @@ try {
   $autoPageText = Get-Content -LiteralPath (Join-Path $noTocRepo "Docs\GameDesign\Escalation-Loop.md") -Raw
   Assert-Condition "case3b new-page exits cleanly" ($autoPageResult.ExitCode -eq 0) "exit code=0" "exit code=$($autoPageResult.ExitCode)"
   Assert-TextContains "case3b default page position increments" $autoPageText "sidebar_position: 3"
+
+  Step "Case 3c: new-page can scaffold a top-level docs page without a section"
+  $topLevelPageRepo = New-MinimalDocsRepo -Name "repo-top-level-page"
+  $topLevelPageToolset = New-StubToolset -Name "toolset-top-level-page"
+  $topLevelPageResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $topLevelPageRepo `
+    -CliArgs @("new-page", "Setup", "-Title", "Setup") `
+    -Toolset $topLevelPageToolset `
+    -SandboxRoot (New-ScratchPath "sandbox-top-level-page")
+  $topLevelPagePath = Join-Path $topLevelPageRepo "Docs\Setup.md"
+  $topLevelPageText = Get-Content -LiteralPath $topLevelPagePath -Raw
+  Assert-Condition "case3c top-level new-page exits cleanly" ($topLevelPageResult.ExitCode -eq 0) "exit code=0" "exit code=$($topLevelPageResult.ExitCode)"
+  Assert-Condition "case3c top-level page created" (Test-Path -LiteralPath $topLevelPagePath) "Setup.md created"
+  Assert-TextContains "case3c top-level page slug" $topLevelPageText "slug: /setup"
+  Assert-TextContains "case3c top-level page position" $topLevelPageText "sidebar_position: 2"
+  Assert-TextContains "case3c top-level output confirms skipped toc" $topLevelPageResult.OutputText "TOC generation skipped."
 
   Step "Case 3d: create-page supports generic front matter passthrough"
   $pageMetadataRepo = New-MinimalDocsRepo -Name "repo-page-metadata"
@@ -419,15 +581,15 @@ sidebar_position: 1
   Assert-TextContains "case3d front matter custom string field" $pageMetadataText "foo: bar"
   Assert-TextContains "case3d front matter json field" $pageMetadataText "custom_edit_url: null"
 
-  Step "Case 3c: new-page fails cleanly when the target section does not exist"
+  Step "Case 3e: new-page fails cleanly when the target section does not exist"
   $missingSectionResult = Invoke-DocsToolsCommand `
     -ScratchRepoRoot $noTocRepo `
     -CliArgs @("new-page", "MissingSection", "Ghost-Notes") `
     -Toolset $noTocToolset `
     -SandboxRoot (New-ScratchPath "sandbox-missing-section")
-  Assert-Condition "case3c new-page fails for missing section" ($missingSectionResult.ExitCode -ne 0) "exit code=$($missingSectionResult.ExitCode)" "expected non-zero exit code"
-  Assert-TextContains "case3c output is user-friendly" $missingSectionResult.OutputText "Error: Section does not exist:"
-  Assert-TextNotContains "case3c output hides stack traces" $missingSectionResult.OutputText "DocsTools.ps1:"
+  Assert-Condition "case3e new-page fails for missing section" ($missingSectionResult.ExitCode -ne 0) "exit code=$($missingSectionResult.ExitCode)" "expected non-zero exit code"
+  Assert-TextContains "case3e output is user-friendly" $missingSectionResult.OutputText "Error: Section does not exist:"
+  Assert-TextNotContains "case3e output hides stack traces" $missingSectionResult.OutputText "DocsTools.ps1:"
 
   Step "Case 4: install-bridge copies the optional VS Code bridge"
   $bridgeToolset = New-StubToolset -Name "toolset-install-bridge" -CodeExtensions @("yzhang.markdown-all-in-one")
@@ -444,32 +606,48 @@ sidebar_position: 1
   Assert-Condition "case4 bridge code copied" (Test-Path -LiteralPath (Join-Path $bridgeInstallPath "extension.js")) "extension.js copied"
   Assert-TextContains "case4 output mentions markdown extension" $installBridgeResult.OutputText "Markdown All in One is already installed."
 
-  Step "Case 5: start launches a background server with default args, status reports it, and stop kills it"
+  Step "Case 5: start streams the dev server in the current terminal by default"
+  $foregroundStartRepo = New-MinimalDocsRepo -Name "repo-start-foreground"
+  $foregroundStartToolset = New-StubToolset -Name "toolset-start-foreground"
+  $foregroundStartResult = Invoke-DocsToolsCommand `
+    -ScratchRepoRoot $foregroundStartRepo `
+    -CliArgs @("start", "--port", "3001") `
+    -Toolset $foregroundStartToolset `
+    -SandboxRoot (New-ScratchPath "sandbox-start-foreground")
+  $foregroundStartStubLog = Get-Content -LiteralPath $foregroundStartToolset.CommandLog -Raw
+  $foregroundStateFiles = @(Get-ChildItem -Path (Join-Path $foregroundStartResult.SandboxTemp "scarebandb-docs-tools") -Recurse -Filter docs-server.json -ErrorAction SilentlyContinue)
+  Assert-Condition "case5 start exits cleanly" ($foregroundStartResult.ExitCode -eq 0) "exit code=0" "exit code=$($foregroundStartResult.ExitCode)"
+  Assert-TextContains "case5 output confirms foreground start" $foregroundStartResult.OutputText "Starting docs dev server in the current terminal."
+  Assert-TextContains "case5 output includes requested port url" $foregroundStartResult.OutputText "http://localhost:3001/docs/"
+  Assert-TextContains "case5 npm start was invoked" $foregroundStartStubLog "npm run start -- --port 3001"
+  Assert-Condition "case5 no background state file created" ($foregroundStateFiles.Count -eq 0) "no docs-server.json created"
+
+  Step "Case 5b: start --background launches a tracked server, status reports it, and stop kills it"
   $startStopRepo = New-MinimalDocsRepo -Name "repo-start-stop"
   $startStopToolset = New-StubToolset -Name "toolset-start-stop"
   $startStopSandbox = New-ScratchPath "sandbox-start-stop"
   $startResult = Invoke-DocsToolsCommand `
     -ScratchRepoRoot $startStopRepo `
-    -CliArgs @("start") `
+    -CliArgs @("start", "--background") `
     -Toolset $startStopToolset `
     -SandboxRoot $startStopSandbox `
     -ExtraEnv @{ STUB_NPM_START_MODE = "sleep" }
   $serverStateFiles = @(Get-ChildItem -Path (Join-Path $startResult.SandboxTemp "scarebandb-docs-tools") -Recurse -Filter docs-server.json -ErrorAction SilentlyContinue)
   $serverState = Get-Content -LiteralPath $serverStateFiles[0].FullName -Raw | ConvertFrom-Json
   $startStubLog = Get-Content -LiteralPath $startStopToolset.CommandLog -Raw
-  Assert-Condition "case5 start exits cleanly" ($startResult.ExitCode -eq 0) "exit code=0" "exit code=$($startResult.ExitCode)"
-  Assert-TextContains "case5 output confirms background start" $startResult.OutputText "Started docs dev server in the background"
-  Assert-TextContains "case5 output includes default port url" $startResult.OutputText "http://localhost:3000/docs/"
-  Assert-Condition "case5 server state file created" ($serverStateFiles.Count -eq 1) "docs-server.json created"
-  Assert-TextContains "case5 npm start was invoked" $startStubLog "npm run start"
+  Assert-Condition "case5b start exits cleanly" ($startResult.ExitCode -eq 0) "exit code=0" "exit code=$($startResult.ExitCode)"
+  Assert-TextContains "case5b output confirms background start" $startResult.OutputText "Started docs dev server in the background"
+  Assert-TextContains "case5b output includes default port url" $startResult.OutputText "http://localhost:3000/docs/"
+  Assert-Condition "case5b server state file created" ($serverStateFiles.Count -eq 1) "docs-server.json created"
+  Assert-TextContains "case5b npm start was invoked" $startStubLog "npm run start"
   $statusResult = Invoke-DocsToolsCommand `
     -ScratchRepoRoot $startStopRepo `
     -CliArgs @("status") `
     -Toolset $startStopToolset `
     -SandboxRoot $startStopSandbox
-  Assert-Condition "case5 status exits cleanly" ($statusResult.ExitCode -eq 0) "exit code=0" "exit code=$($statusResult.ExitCode)"
-  Assert-Condition "case5 status reports a handled server state" (
-    $statusResult.OutputText.Contains("Docs dev server is running") -or
+  Assert-Condition "case5b status exits cleanly" ($statusResult.ExitCode -eq 0) "exit code=0" "exit code=$($statusResult.ExitCode)"
+  Assert-Condition "case5b status reports a handled server state" (
+    $statusResult.OutputText.Contains("Background docs dev server is running") -or
     $statusResult.OutputText.Contains("stale state still exists")
   ) "status command reported a handled server state"
   $stopResult = Invoke-DocsToolsCommand `
@@ -477,13 +655,13 @@ sidebar_position: 1
     -CliArgs @("stop") `
     -Toolset $startStopToolset `
     -SandboxRoot $startStopSandbox
-  Assert-Condition "case5 stop exits cleanly" ($stopResult.ExitCode -eq 0) "exit code=0" "exit code=$($stopResult.ExitCode)"
-  Assert-Condition "case5 output confirms stop handling" (
-    $stopResult.OutputText.Contains("Stopped docs dev server") -or
-    $stopResult.OutputText.Contains("Removed stale docs dev server state")
+  Assert-Condition "case5b stop exits cleanly" ($stopResult.ExitCode -eq 0) "exit code=0" "exit code=$($stopResult.ExitCode)"
+  Assert-Condition "case5b output confirms stop handling" (
+    $stopResult.OutputText.Contains("Stopped background docs dev server") -or
+    $stopResult.OutputText.Contains("Removed stale background docs dev server state")
   ) "stop command reported a handled shutdown path"
-  Assert-Condition "case5 state file removed after stop" (-not (Test-Path -LiteralPath $serverStateFiles[0].FullName)) "docs-server.json removed"
-  Assert-Condition "case5 server pid stopped" (-not (Get-Process -Id $serverState.processId -ErrorAction SilentlyContinue)) "process $($serverState.processId) stopped"
+  Assert-Condition "case5b state file removed after stop" (-not (Test-Path -LiteralPath $serverStateFiles[0].FullName)) "docs-server.json removed"
+  Assert-Condition "case5b server pid stopped" (-not (Get-Process -Id $serverState.processId -ErrorAction SilentlyContinue)) "process $($serverState.processId) stopped"
 
   Step "Case 6: docs-tools can invoke other website package scripts with passthrough flags"
   $scriptRepo = New-MinimalDocsRepo -Name "repo-script-passthrough"
@@ -522,6 +700,16 @@ sidebar_position: 1
 # Game Design
 '@
   Write-Utf8NoBomFile -Path (Join-Path $tocRepo "Docs\GameDesign\README.md") -Content $tocSectionReadme
+  Write-Utf8NoBomFile -Path (Join-Path $tocRepo "Docs\GameDesign\_category_.json") -Content @'
+{
+  "label": "Game Design",
+  "position": 2,
+  "link": {
+    "type": "doc",
+    "id": "GameDesign/README"
+  }
+}
+'@
   $tocToolset = New-StubToolset -Name "toolset-toc" -CodeExtensions @(
     "yzhang.markdown-all-in-one",
     "rim28.scarebandb-docs-tools-bridge"

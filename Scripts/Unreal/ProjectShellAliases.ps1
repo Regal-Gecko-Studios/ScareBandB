@@ -377,7 +377,17 @@ function Invoke-DocsTools {
     -RelativePath "Scripts\Docs\DocsTools.ps1" `
     -NotFoundMessagePrefix "Docs tools script not found"
 
-  & $docsScript -RepoRoot $repoRoot @argsList
+  & {
+    . $docsScript
+    try {
+      $resolvedRepoRoot = Get-DocsToolsRepoRoot -ExplicitRepoRoot $repoRoot
+      $normalizedDocsArgs = Get-NormalizedArgumentList -Values $argsList
+      Invoke-DocsToolsMain -ResolvedRepoRoot $resolvedRepoRoot -CommandArguments $normalizedDocsArgs
+    }
+    catch {
+      Write-DocsToolsError -Message $_.Exception.Message
+    }
+  }
 }
 
 function Show-CodexPromptHelp {

@@ -362,8 +362,8 @@ try {
   if ($docsToolsAvailable) {
     $docsToolsHelp = @(& { docs-tools help } 2>&1 6>&1)
     $docsToolsHelpText = ($docsToolsHelp | ForEach-Object { "$_" }) -join "`n"
-    Assert-TextContains "case7b docs-tools help line" $docsToolsHelpText "docs-tools new-page <SectionPath> <PageName>"
-    Assert-TextContains "case7b docs-tools install bridge line" $docsToolsHelpText "docs-tools install-bridge"
+    Assert-TextContains "case7b docs-tools help line" $docsToolsHelpText "new-page, create-page"
+    Assert-TextContains "case7b docs-tools install bridge line" $docsToolsHelpText "install-bridge"
   }
   else {
     Skip "case7b docs-tools help" "DocsTools.ps1 is not present in this repo."

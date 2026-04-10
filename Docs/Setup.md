@@ -37,7 +37,9 @@ docs-tools start
 
 The Docusaurus site is already set up in `website/`. You do not need to create a new site scaffold for this repo. See [Docusaurus Setup](./DocsSite/Docusaurus-Setup.md) for the edit/preview/build workflow.
 
-When you are done with the local docs server:
+`docs-tools start` now stays attached to the current terminal so you can see live server output. If you want the old detached tracked mode instead, run `docs-tools start --background`.
+
+When you are done with the tracked background docs server:
 
 ```powershell
 docs-tools stop
