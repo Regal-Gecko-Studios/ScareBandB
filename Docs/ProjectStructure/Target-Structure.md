@@ -151,13 +151,3 @@ Goal: add a reusable scare-response framework.
 3. Put runtime code under `Source/ScareResponse/`.
 4. Keep project-specific glue in `Source/ScareBandB/`.
 5. Document any layout rule changes in this file.
-
-## Structure Checklist
-
-```text
-[ ] New folders follow the canonical roots above
-[ ] Public and Private C++ domains stay mirrored
-[ ] Unreal assets were moved in editor, not in Explorer
-[ ] Reusable systems were evaluated for plugin placement
-[ ] Docs were updated if the target layout changed
-```
