@@ -434,7 +434,9 @@ param(
   [switch]$Force,
   [switch]$NoBuild,
   [switch]$NoRegen,
+  [switch]$CleanGenerated,
   [switch]$DryRun,
+  [string]$RepoRoot,
   [string]$Config = "Development",
   [string]$Platform = "Win64"
 )
@@ -444,7 +446,9 @@ $outPath = Join-Path (Split-Path -Parent $PSCommandPath) "last-run.json"
   Force = [bool]$Force
   NoBuild = [bool]$NoBuild
   NoRegen = [bool]$NoRegen
+  CleanGenerated = [bool]$CleanGenerated
   DryRun = [bool]$DryRun
+  RepoRoot = $RepoRoot
   Config = $Config
   Platform = $Platform
 } | ConvertTo-Json -Compress | Set-Content -LiteralPath $outPath -Encoding UTF8
@@ -456,13 +460,17 @@ $outPath = Join-Path (Split-Path -Parent $PSCommandPath) "last-run.json"
     Reset-LoadedAliases
     . $profileNew
 
-    Invoke-UETools build -NoBuild -NoRegen -DryRun -Config Debug -Platform Win64 | Out-Null
+    Invoke-UETools build -CleanGenerated -NoBuild -NoRegen -DryRun -Config Debug -Platform Win64 | Out-Null
     Assert-Condition "case10 build wrote result file" (Test-Path -LiteralPath $forwardResult) "last-run.json written"
     $payload = Get-Content -LiteralPath $forwardResult -Raw | ConvertFrom-Json
     Assert-Condition "case10 Force forwarded" ([bool]$payload.Force) "Force=true"
     Assert-Condition "case10 NoBuild forwarded" ([bool]$payload.NoBuild) "NoBuild=true"
     Assert-Condition "case10 NoRegen forwarded" ([bool]$payload.NoRegen) "NoRegen=true"
+    Assert-Condition "case10 CleanGenerated forwarded" ([bool]$payload.CleanGenerated) "CleanGenerated=true"
     Assert-Condition "case10 DryRun forwarded" ([bool]$payload.DryRun) "DryRun=true"
+    $expectedForwardRepo = [System.IO.Path]::GetFullPath($forwardRepo)
+    $actualForwardRepo = [System.IO.Path]::GetFullPath([string]$payload.RepoRoot)
+    Assert-Condition "case10 RepoRoot forwarded" ($actualForwardRepo -eq $expectedForwardRepo) "RepoRoot=$expectedForwardRepo" "RepoRoot=$actualForwardRepo"
     Assert-Condition "case10 Config forwarded" ($payload.Config -eq "Debug") "Config=Debug"
     Assert-Condition "case10 Platform forwarded" ($payload.Platform -eq "Win64") "Platform=Win64"
   }

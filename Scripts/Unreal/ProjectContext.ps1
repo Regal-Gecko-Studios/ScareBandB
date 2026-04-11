@@ -358,12 +358,44 @@ function Get-EngineRootFromRegistryAssociation {
 }
 
 function Get-CommonEngineInstallRoots {
-  return @(
-    "S:\Program Files (x86)\Epic Games",
-    "G:\Programs\Epic\Epic Games",
-    "C:\Program Files\Epic Games",
-    "C:\Program Files (x86)\Epic Games"
-  )
+  $roots = New-Object System.Collections.Generic.List[string]
+  $customRoots = [string](Get-Item -Path "Env:UE_ENGINE_COMMON_INSTALL_ROOTS" -ErrorAction SilentlyContinue).Value
+  if (-not [string]::IsNullOrWhiteSpace($customRoots)) {
+    foreach ($root in @($customRoots -split [regex]::Escape([System.IO.Path]::PathSeparator))) {
+      $trimmed = $root.Trim()
+      if (-not [string]::IsNullOrWhiteSpace($trimmed) -and -not ($roots -contains $trimmed)) {
+        [void]$roots.Add($trimmed)
+      }
+    }
+  }
+
+  foreach ($root in @(
+      "C:\Program Files\Epic Games",
+      "C:\Program Files (x86)\Epic Games"
+    )) {
+    if (-not ($roots -contains $root)) {
+      [void]$roots.Add($root)
+    }
+  }
+
+  return @($roots.ToArray())
+}
+
+function Get-EngineFolderCandidates {
+  param([string]$EngineAssociation)
+
+  $folderCandidates = New-Object System.Collections.Generic.List[string]
+  if (-not [string]::IsNullOrWhiteSpace($EngineAssociation)) {
+    $trimmedAssociation = $EngineAssociation.Trim()
+    if ($trimmedAssociation -match '^UE_') {
+      [void]$folderCandidates.Add($trimmedAssociation)
+    }
+    elseif ($trimmedAssociation -match '^\d+(\.\d+)*$') {
+      [void]$folderCandidates.Add("UE_$trimmedAssociation")
+    }
+  }
+
+  return @($folderCandidates.ToArray())
 }
 
 function Get-EngineRootFromCommonInstalls {
@@ -378,19 +410,7 @@ function Get-EngineRootFromCommonInstalls {
     return $null
   }
 
-  $folderCandidates = New-Object System.Collections.Generic.List[string]
-  if (-not [string]::IsNullOrWhiteSpace($EngineAssociation)) {
-    if ($EngineAssociation -match '^UE_') {
-      [void]$folderCandidates.Add($EngineAssociation)
-    }
-    else {
-      [void]$folderCandidates.Add("UE_$EngineAssociation")
-    }
-  }
-
-  if (-not ($folderCandidates -contains "UE_5.7")) {
-    [void]$folderCandidates.Add("UE_5.7")
-  }
+  $folderCandidates = @(Get-EngineFolderCandidates -EngineAssociation $EngineAssociation)
 
   foreach ($installRoot in @(Get-CommonEngineInstallRoots)) {
     if (-not (Test-Path -LiteralPath $installRoot)) {

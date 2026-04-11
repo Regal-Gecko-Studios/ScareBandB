@@ -87,6 +87,16 @@ function Get-ProjectTestManifest {
       -ResultDirectory "Scripts/Tests/Test-UnrealSync-RegenerationResults")
 
     (New-TestManifestEntry `
+      -Id "init-repo-tool-readiness" `
+      -Name "Init Repo Tool Readiness" `
+      -Path "Scripts/Tests/Test-InitRepoToolReadiness.ps1" `
+      -Category "init" `
+      -Description "Validates Init-Repo optional tool prerequisite setup and readiness reporting in a scratch repo." `
+      -SupportsNoCleanup $true `
+      -SupportsFailFast $true `
+      -ResultDirectory "Scripts/Tests/Test-InitRepoToolReadinessResults")
+
+    (New-TestManifestEntry `
       -Id "new-artsource-path" `
       -Name "New ArtSource Path" `
       -Path "Scripts/Tests/Test-New-ArtSourcePath.ps1" `

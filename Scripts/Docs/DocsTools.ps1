@@ -11,7 +11,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
-$script:DocsToolsBridgeExtensionId = "rim28.scarebandb-docs-tools-bridge"
+$script:DocsToolsBridgeExtensionId = "ueproject.docs-tools-bridge"
 $script:MarkdownAllInOneExtensionId = "yzhang.markdown-all-in-one"
 $script:TocMarker = "<!-- docs-tools-toc -->"
 $script:CodeExtensionList = $null
@@ -211,7 +211,7 @@ function Get-WebsitePackageScriptNames {
 
 function Get-DocsToolsRootHelp {
 @"
-ScareBandB docs automation.
+UE project docs automation.
 
 Usage:
   docs-tools <command> [options]
@@ -501,7 +501,7 @@ Checks common local docs prerequisites:
 @"
 docs-tools install-bridge
 
-Installs the optional ScareBandB VS Code bridge used for TOC generation. Markdown All in One still needs to be installed separately.
+Installs the optional UE project VS Code bridge used for TOC generation. Markdown All in One still needs to be installed separately.
 "@
       return
     }
@@ -1023,7 +1023,7 @@ function Get-BridgeRequestDirectory {
   param([Parameter(Mandatory)][string]$ResolvedRepoRoot)
 
   $workspaceKey = Get-WorkspaceRequestKey -ResolvedRepoRoot $ResolvedRepoRoot
-  return (Join-Path ([System.IO.Path]::GetTempPath()) "scarebandb-docs-tools\$workspaceKey")
+  return (Join-Path ([System.IO.Path]::GetTempPath()) "ueproject-docs-tools\$workspaceKey")
 }
 
 function Queue-TocRequest {

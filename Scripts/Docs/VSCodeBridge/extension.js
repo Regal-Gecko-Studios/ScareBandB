@@ -5,7 +5,7 @@ const path = require('path');
 const vscode = require('vscode');
 
 const TOC_COMMAND = 'markdown.extension.toc.create';
-const REQUEST_ROOT = path.join(os.tmpdir(), 'scarebandb-docs-tools');
+const REQUEST_ROOT = path.join(os.tmpdir(), 'ueproject-docs-tools');
 const processing = new Set();
 const watchers = new Map();
 let queue = Promise.resolve();
@@ -152,7 +152,7 @@ function refreshWorkspaceWatchers(context) {
 
 function activate(context) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('scarebandb.docsBridge.processPendingRequests', async () => {
+    vscode.commands.registerCommand('ueproject.docsBridge.processPendingRequests', async () => {
       for (const folder of getWorkspaceFolders()) {
         if (folder.uri.scheme !== 'file') {
           continue;

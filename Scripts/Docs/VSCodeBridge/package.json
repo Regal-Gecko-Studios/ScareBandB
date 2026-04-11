@@ -1,22 +1,22 @@
 {
-  "name": "scarebandb-docs-tools-bridge",
-  "displayName": "ScareBandB Docs Tools Bridge",
-  "description": "Optional VS Code bridge for ScareBandB docs-tools automation.",
+  "name": "docs-tools-bridge",
+  "displayName": "UE Project Docs Tools Bridge",
+  "description": "Optional VS Code bridge for UE project docs-tools automation.",
   "version": "0.0.1",
-  "publisher": "rim28",
+  "publisher": "ueproject",
   "engines": {
     "vscode": "^1.77.0"
   },
   "main": "./extension.js",
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:scarebandb.docsBridge.processPendingRequests"
+    "onCommand:ueproject.docsBridge.processPendingRequests"
   ],
   "contributes": {
     "commands": [
       {
-        "command": "scarebandb.docsBridge.processPendingRequests",
-        "title": "ScareBandB Docs Bridge: Process Pending Requests"
+        "command": "ueproject.docsBridge.processPendingRequests",
+        "title": "UE Project Docs Bridge: Process Pending Requests"
       }
     ]
   }

@@ -7,6 +7,7 @@ param(
 
   # Manual / control flags
   [switch]$Force,           # Always run regen+build even if no structural triggers detected
+  [switch]$CleanGenerated,  # Delete Binaries and Intermediate before selected actions
   [switch]$CleanSaved,      # Delete the Saved directory
   [switch]$CleanCache,      # Delete the DerivedDataCache directory
   [switch]$NoRegen,         # Skip generating project files
@@ -14,8 +15,14 @@ param(
   [switch]$NonInteractive,  # Tells the script to avoid prompting the user
   [switch]$DryRun,          # Validate detection/prompt flow without cleanup/build
 
+  # Optional: explicitly point at a repo root when running from outside the UE project
+  [string]$RepoRoot,
+
   # Optional: explicitly point at a .code-workspace file
   [string]$WorkspacePath,
+
+  # Optional: explicitly point at a .uproject file when the repo has more than one
+  [string]$UProjectPath,
 
   [ValidateSet("Development", "Debug")]
   [string]$Config = "Development",
@@ -76,6 +83,48 @@ function Test-EnvTrue {
     "yes" { return $true }
     default { return $false }
   }
+}
+
+function Get-UProjectRootFromLocation {
+  $candidate = (Get-Location).Path
+  while (-not [string]::IsNullOrWhiteSpace($candidate)) {
+    $uprojects = @(
+      Get-ChildItem -LiteralPath $candidate -Filter "*.uproject" -File -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    )
+    if ($uprojects.Count -gt 0) {
+      return $candidate
+    }
+
+    $parent = Split-Path -Path $candidate -Parent
+    if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $candidate) {
+      break
+    }
+
+    $candidate = $parent
+  }
+
+  return $null
+}
+
+function Resolve-UnrealSyncRoot {
+  param([string]$ExplicitRepoRoot)
+
+  if (-not [string]::IsNullOrWhiteSpace($ExplicitRepoRoot)) {
+    return (Resolve-RepoRootOrThrow -RepoRoot $ExplicitRepoRoot)
+  }
+
+  $gitRoot = Get-RepoRootFromGit
+  if (-not [string]::IsNullOrWhiteSpace($gitRoot)) {
+    return $gitRoot
+  }
+
+  $uprojectRoot = Get-UProjectRootFromLocation
+  if (-not [string]::IsNullOrWhiteSpace($uprojectRoot)) {
+    return $uprojectRoot
+  }
+
+  throw "Could not resolve project root. Run from inside a git repository or UE project directory, or pass -RepoRoot."
 }
 
 
@@ -140,12 +189,12 @@ function Remove-IfExists {
 }
 
 function Get-UProjectPath {
-  $projectContext = Get-ProjectContext -RepoRoot (Get-Location).Path -WorkspacePath $WorkspacePath
+  $projectContext = Get-ProjectContext -RepoRoot $script:ResolvedRepoRoot -UProjectPath $UProjectPath -WorkspacePath $WorkspacePath
   return $projectContext.UProjectPath
 }
 
 function Get-ProjectName([string]$uprojectPath) {
-  $projectContext = Get-ProjectContext -RepoRoot (Get-Location).Path -UProjectPath $uprojectPath -WorkspacePath $WorkspacePath
+  $projectContext = Get-ProjectContext -RepoRoot $script:ResolvedRepoRoot -UProjectPath $uprojectPath -WorkspacePath $WorkspacePath
   return $projectContext.ProjectName
 }
 
@@ -352,7 +401,7 @@ function Get-EngineRootFromEngineAssociation(
 
 function Resolve-EngineRootForBuild([string]$workspacePathOverride, [string]$uprojectPath) {
   $projectContext = Get-ProjectContext `
-    -RepoRoot (Get-Location).Path `
+    -RepoRoot $script:ResolvedRepoRoot `
     -UProjectPath $uprojectPath `
     -WorkspacePath $workspacePathOverride
 
@@ -530,11 +579,124 @@ function Resolve-RegenerateFallbackTool([string]$engineRoot) {
   }
 }
 
-function Get-ChangedFiles([string]$oldrev, [string]$newrev) {
+function Write-Utf8NoBomFile {
+  param(
+    [Parameter(Mandatory)][string]$Path,
+    [Parameter(Mandatory)][AllowEmptyString()][string]$Content
+  )
+
+  $parent = Split-Path -Path $Path -Parent
+  if ($parent -and -not (Test-Path -LiteralPath $parent)) {
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+  }
+
+  $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+  [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+}
+
+function Get-ChangedFileRecords([string]$oldrev, [string]$newrev) {
   if ([string]::IsNullOrWhiteSpace($oldrev) -or [string]::IsNullOrWhiteSpace($newrev)) { return @() }
-  $out = git diff --name-only $oldrev $newrev 2>$null
+
+  $out = git diff --name-status $oldrev $newrev 2>$null
   if ($LASTEXITCODE -ne 0) { return @() }
-  @($out)
+
+  $records = @()
+  foreach ($line in @($out)) {
+    if ([string]::IsNullOrWhiteSpace($line)) { continue }
+
+    $parts = @($line -split "`t")
+    if ($parts.Count -lt 2) { continue }
+
+    $status = [string]$parts[0]
+    if (($status.StartsWith("R") -or $status.StartsWith("C")) -and $parts.Count -ge 3) {
+      $records += [pscustomobject]@{
+        Status = $status
+        Path = [string]$parts[2]
+        OldPath = [string]$parts[1]
+      }
+      continue
+    }
+
+    $records += [pscustomobject]@{
+      Status = $status
+      Path = [string]$parts[1]
+      OldPath = $null
+    }
+  }
+
+  return @($records)
+}
+
+function Test-IsUnrealCppPath([string]$Path) {
+  if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+  return (
+    $Path -match '^Source/.*\.(h|hpp|cpp|inl)$' -or
+    $Path -match '^Plugins/.*\.(h|hpp|cpp|inl)$'
+  )
+}
+
+function Test-IsUnrealProjectStructurePath([string]$Path) {
+  if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+  return (
+    $Path -match '\.Build\.cs$' -or
+    $Path -match '\.Target\.cs$' -or
+    $Path -match '\.uproject$' -or
+    $Path -match '^Plugins/.*\.uplugin$'
+  )
+}
+
+function Test-IsAddDeleteOrRenameStatus([string]$Status) {
+  if ([string]::IsNullOrWhiteSpace($Status)) { return $false }
+  return (
+    $Status.StartsWith("A") -or
+    $Status.StartsWith("D") -or
+    $Status.StartsWith("R")
+  )
+}
+
+function Get-UnrealSyncActionPlan([object[]]$ChangedFileRecords) {
+  if (-not $ChangedFileRecords -or $ChangedFileRecords.Count -eq 0) {
+    return [pscustomobject]@{
+      BuildTriggers = @()
+      RegenTriggers = @()
+      ShouldBuild = $false
+      ShouldRegen = $false
+    }
+  }
+
+  $buildTriggers = @()
+  $regenTriggers = @()
+
+  foreach ($record in @($ChangedFileRecords)) {
+    $paths = @($record.Path, $record.OldPath) |
+      Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+      Sort-Object -Unique
+
+    foreach ($path in $paths) {
+      if (Test-IsUnrealCppPath -Path $path) {
+        $buildTriggers += $path
+        if (Test-IsAddDeleteOrRenameStatus -Status $record.Status) {
+          $regenTriggers += $path
+        }
+        continue
+      }
+
+      if (Test-IsUnrealProjectStructurePath -Path $path) {
+        $buildTriggers += $path
+        $regenTriggers += $path
+      }
+    }
+  }
+
+  $buildTriggers = @($buildTriggers | Sort-Object -Unique)
+  $regenTriggers = @($regenTriggers | Sort-Object -Unique)
+
+  return [pscustomobject]@{
+    BuildTriggers = $buildTriggers
+    RegenTriggers = $regenTriggers
+    ShouldBuild = ($buildTriggers.Count -gt 0)
+    ShouldRegen = ($regenTriggers.Count -gt 0)
+  }
 }
 
 function Get-RebuildTriggers([string[]]$ChangedFiles) {
@@ -545,11 +707,7 @@ function Get-RebuildTriggers([string[]]$ChangedFiles) {
   $triggers = @()
 
   foreach ($f in $ChangedFiles) {
-    if ($f -match '^Source/.*\.(h|hpp|cpp|inl)$') { $triggers += $f; continue }
-    if ($f -match '\.Build\.cs$') { $triggers += $f; continue }
-    if ($f -match '\.Target\.cs$') { $triggers += $f; continue }
-    if ($f -match '\.uproject$') { $triggers += $f; continue }
-    if ($f -match '^Plugins/.*\.(uplugin|Build\.cs|Target\.cs|h|hpp|cpp)$') {
+    if ((Test-IsUnrealCppPath -Path $f) -or (Test-IsUnrealProjectStructurePath -Path $f)) {
       $triggers += $f
       continue
     }
@@ -558,14 +716,28 @@ function Get-RebuildTriggers([string[]]$ChangedFiles) {
   return ($triggers | Sort-Object -Unique)
 }
 
-function Show-RebuildTriggers([string[]]$Triggers) {
-  if (-not $Triggers -or $Triggers.Count -eq 0) {
+function Show-UnrealSyncActionPlan($ActionPlan) {
+  if (-not $ActionPlan -or (-not $ActionPlan.ShouldBuild -and -not $ActionPlan.ShouldRegen)) {
     return
   }
 
-  Warn "Structural C++ changes detected in the following files:"
-  foreach ($t in $Triggers) {
-    Warn " - $t"
+  $actions = @()
+  if ($ActionPlan.ShouldRegen) { $actions += "regenerate project files" }
+  if ($ActionPlan.ShouldBuild) { $actions += "build the editor" }
+  Warn "UE Sync action plan: $($actions -join ' and ')."
+
+  if ($ActionPlan.RegenTriggers.Count -gt 0) {
+    Warn "Project-file regeneration triggers:"
+    foreach ($t in @($ActionPlan.RegenTriggers)) {
+      Warn " - $t"
+    }
+  }
+
+  if ($ActionPlan.BuildTriggers.Count -gt 0) {
+    Warn "Build triggers:"
+    foreach ($t in @($ActionPlan.BuildTriggers)) {
+      Warn " - $t"
+    }
   }
 }
 
@@ -686,8 +858,264 @@ function Build-Editor([string]$engineRoot, [string]$uprojectPath, [string]$proje
   & $buildBat $target $platform $config -Project="`"$uprojectPath`"" -WaitMutex | Out-Host
 }
 
+function Test-GitTrackedPath([string]$RelativePath) {
+  if ([string]::IsNullOrWhiteSpace($RelativePath)) { return $false }
+  & git ls-files --error-unmatch -- $RelativePath 2>$null | Out-Null
+  return ($LASTEXITCODE -eq 0)
+}
+
+function Get-WorkspaceProtectionPaths {
+  param(
+    [Parameter(Mandatory)]$ProjectContext,
+    [string]$WorkspacePathOverride
+  )
+
+  $paths = New-Object System.Collections.Generic.List[string]
+
+  if (-not [string]::IsNullOrWhiteSpace($WorkspacePathOverride)) {
+    [void]$paths.Add((Resolve-PathRelativeTo $ProjectContext.RepoRoot $WorkspacePathOverride))
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($ProjectContext.WorkspacePath)) {
+    [void]$paths.Add($ProjectContext.WorkspacePath)
+  }
+
+  [void]$paths.Add((Join-Path $ProjectContext.RepoRoot "$($ProjectContext.ProjectName).code-workspace"))
+
+  return @(
+    $paths.ToArray() |
+      Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+      ForEach-Object { [System.IO.Path]::GetFullPath($_) } |
+      Sort-Object -Unique
+  )
+}
+
+function New-ProjectFileArtifactSnapshot {
+  param(
+    [Parameter(Mandatory)]$ProjectContext,
+    [string]$WorkspacePathOverride
+  )
+
+  $workspaceSnapshots = @()
+  foreach ($workspacePath in @(Get-WorkspaceProtectionPaths -ProjectContext $ProjectContext -WorkspacePathOverride $WorkspacePathOverride)) {
+    if (-not (Test-Path -LiteralPath $workspacePath -PathType Leaf)) { continue }
+
+    $workspaceSnapshots += [pscustomobject]@{
+      Path = $workspacePath
+      Content = Get-Content -LiteralPath $workspacePath -Raw
+    }
+  }
+
+  $ignorePath = Join-Path $ProjectContext.RepoRoot ".ignore"
+  $ignoreExists = Test-Path -LiteralPath $ignorePath -PathType Leaf
+  $ignoreTracked = Test-GitTrackedPath -RelativePath ".ignore"
+
+  return [pscustomobject]@{
+    WorkspaceSnapshots = @($workspaceSnapshots)
+    IgnorePath = $ignorePath
+    IgnoreExists = $ignoreExists
+    IgnoreTracked = $ignoreTracked
+    IgnoreContent = if ($ignoreExists) { Get-Content -LiteralPath $ignorePath -Raw } else { $null }
+  }
+}
+
+function Test-JsonObjectProperty {
+  param(
+    [Parameter(Mandatory)]$Object,
+    [Parameter(Mandatory)][string]$Name
+  )
+
+  return ($null -ne $Object.PSObject.Properties[$Name])
+}
+
+function Get-JsonObjectPropertyValue {
+  param(
+    [Parameter(Mandatory)]$Object,
+    [Parameter(Mandatory)][string]$Name
+  )
+
+  $property = $Object.PSObject.Properties[$Name]
+  if ($property) { return $property.Value }
+  return $null
+}
+
+function Set-JsonObjectPropertyValue {
+  param(
+    [Parameter(Mandatory)]$Object,
+    [Parameter(Mandatory)][string]$Name,
+    [AllowNull()]$Value
+  )
+
+  if (Test-JsonObjectProperty -Object $Object -Name $Name) {
+    $Object.$Name = $Value
+    return
+  }
+
+  $Object | Add-Member -NotePropertyName $Name -NotePropertyValue $Value
+}
+
+function Test-IsJsonObject {
+  param([AllowNull()]$Value)
+  return ($null -ne $Value -and $Value -is [pscustomobject])
+}
+
+function Merge-MissingJsonObjectProperties {
+  param(
+    [Parameter(Mandatory)]$Target,
+    [Parameter(Mandatory)]$Source
+  )
+
+  foreach ($sourceProperty in @($Source.PSObject.Properties)) {
+    $targetValue = Get-JsonObjectPropertyValue -Object $Target -Name $sourceProperty.Name
+    if (-not (Test-JsonObjectProperty -Object $Target -Name $sourceProperty.Name)) {
+      Set-JsonObjectPropertyValue -Object $Target -Name $sourceProperty.Name -Value $sourceProperty.Value
+      continue
+    }
+
+    if ((Test-IsJsonObject -Value $targetValue) -and (Test-IsJsonObject -Value $sourceProperty.Value)) {
+      Merge-MissingJsonObjectProperties -Target $targetValue -Source $sourceProperty.Value
+    }
+  }
+}
+
+function Merge-StringArrayProperty {
+  param(
+    [Parameter(Mandatory)]$Target,
+    [Parameter(Mandatory)]$Source,
+    [Parameter(Mandatory)][string]$PropertyName
+  )
+
+  if (-not (Test-JsonObjectProperty -Object $Source -Name $PropertyName)) { return }
+
+  $existing = @()
+  if (Test-JsonObjectProperty -Object $Target -Name $PropertyName) {
+    $existing = @(Get-JsonObjectPropertyValue -Object $Target -Name $PropertyName)
+  }
+
+  $merged = @($existing + @(Get-JsonObjectPropertyValue -Object $Source -Name $PropertyName)) |
+    Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+    Select-Object -Unique
+
+  Set-JsonObjectPropertyValue -Object $Target -Name $PropertyName -Value @($merged)
+}
+
+function Merge-NamedObjectArrayProperty {
+  param(
+    [Parameter(Mandatory)]$Target,
+    [Parameter(Mandatory)]$Source,
+    [Parameter(Mandatory)][string]$ArrayPropertyName,
+    [Parameter(Mandatory)][string]$KeyPropertyName
+  )
+
+  if (-not (Test-JsonObjectProperty -Object $Source -Name $ArrayPropertyName)) { return }
+
+  $targetItems = @()
+  if (Test-JsonObjectProperty -Object $Target -Name $ArrayPropertyName) {
+    $targetItems = @(Get-JsonObjectPropertyValue -Object $Target -Name $ArrayPropertyName)
+  }
+
+  $targetKeys = @{}
+  foreach ($item in $targetItems) {
+    $key = [string](Get-JsonObjectPropertyValue -Object $item -Name $KeyPropertyName)
+    if (-not [string]::IsNullOrWhiteSpace($key)) {
+      $targetKeys[$key] = $true
+    }
+  }
+
+  $mergedItems = @($targetItems)
+  foreach ($sourceItem in @(Get-JsonObjectPropertyValue -Object $Source -Name $ArrayPropertyName)) {
+    $sourceKey = [string](Get-JsonObjectPropertyValue -Object $sourceItem -Name $KeyPropertyName)
+    if ([string]::IsNullOrWhiteSpace($sourceKey) -or $targetKeys.ContainsKey($sourceKey)) {
+      continue
+    }
+
+    $mergedItems += $sourceItem
+    $targetKeys[$sourceKey] = $true
+  }
+
+  Set-JsonObjectPropertyValue -Object $Target -Name $ArrayPropertyName -Value @($mergedItems)
+}
+
+function Merge-VSCodeWorkspaceJson {
+  param(
+    [Parameter(Mandatory)]$GeneratedWorkspace,
+    [Parameter(Mandatory)]$PreviousWorkspace
+  )
+
+  Merge-MissingJsonObjectProperties -Target $GeneratedWorkspace -Source $PreviousWorkspace
+
+  Merge-NamedObjectArrayProperty -Target $GeneratedWorkspace -Source $PreviousWorkspace -ArrayPropertyName "folders" -KeyPropertyName "path"
+
+  $generatedExtensions = Get-JsonObjectPropertyValue -Object $GeneratedWorkspace -Name "extensions"
+  $previousExtensions = Get-JsonObjectPropertyValue -Object $PreviousWorkspace -Name "extensions"
+  if ((Test-IsJsonObject -Value $generatedExtensions) -and (Test-IsJsonObject -Value $previousExtensions)) {
+    Merge-StringArrayProperty -Target $generatedExtensions -Source $previousExtensions -PropertyName "recommendations"
+    Merge-StringArrayProperty -Target $generatedExtensions -Source $previousExtensions -PropertyName "unwantedRecommendations"
+  }
+
+  $generatedTasks = Get-JsonObjectPropertyValue -Object $GeneratedWorkspace -Name "tasks"
+  $previousTasks = Get-JsonObjectPropertyValue -Object $PreviousWorkspace -Name "tasks"
+  if ((Test-IsJsonObject -Value $generatedTasks) -and (Test-IsJsonObject -Value $previousTasks)) {
+    Merge-NamedObjectArrayProperty -Target $generatedTasks -Source $previousTasks -ArrayPropertyName "tasks" -KeyPropertyName "label"
+  }
+
+  $generatedLaunch = Get-JsonObjectPropertyValue -Object $GeneratedWorkspace -Name "launch"
+  $previousLaunch = Get-JsonObjectPropertyValue -Object $PreviousWorkspace -Name "launch"
+  if ((Test-IsJsonObject -Value $generatedLaunch) -and (Test-IsJsonObject -Value $previousLaunch)) {
+    Merge-NamedObjectArrayProperty -Target $generatedLaunch -Source $previousLaunch -ArrayPropertyName "configurations" -KeyPropertyName "name"
+  }
+
+  return $GeneratedWorkspace
+}
+
+function Restore-ProjectFileArtifactSnapshot {
+  param([Parameter(Mandatory)]$Snapshot)
+
+  foreach ($workspaceSnapshot in @($Snapshot.WorkspaceSnapshots)) {
+    if (-not (Test-Path -LiteralPath $workspaceSnapshot.Path -PathType Leaf)) {
+      Write-Utf8NoBomFile -Path $workspaceSnapshot.Path -Content $workspaceSnapshot.Content
+      Warn "Restored VS Code workspace file after project-file regeneration: $($workspaceSnapshot.Path)"
+      continue
+    }
+
+    try {
+      $currentWorkspaceContent = Get-Content -LiteralPath $workspaceSnapshot.Path -Raw
+      if ($currentWorkspaceContent -ceq $workspaceSnapshot.Content) {
+        continue
+      }
+
+      $previousWorkspace = $workspaceSnapshot.Content | ConvertFrom-Json
+      $generatedWorkspace = $currentWorkspaceContent | ConvertFrom-Json
+      $mergedWorkspace = Merge-VSCodeWorkspaceJson -GeneratedWorkspace $generatedWorkspace -PreviousWorkspace $previousWorkspace
+      $mergedContent = ($mergedWorkspace | ConvertTo-Json -Depth 100)
+      Write-Utf8NoBomFile -Path $workspaceSnapshot.Path -Content ($mergedContent + "`r`n")
+      Warn "Preserved user VS Code workspace settings after project-file regeneration: $($workspaceSnapshot.Path)"
+    }
+    catch {
+      Warn "Could not merge VS Code workspace customization after project-file regeneration. Restoring the pre-regen workspace file."
+      Warn $_.Exception.Message
+      Write-Utf8NoBomFile -Path $workspaceSnapshot.Path -Content $workspaceSnapshot.Content
+    }
+  }
+
+  if ($Snapshot.IgnoreExists -and (Test-Path -LiteralPath $Snapshot.IgnorePath -PathType Leaf)) {
+    $currentIgnoreContent = Get-Content -LiteralPath $Snapshot.IgnorePath -Raw
+    if ($currentIgnoreContent -cne $Snapshot.IgnoreContent) {
+      Write-Utf8NoBomFile -Path $Snapshot.IgnorePath -Content $Snapshot.IgnoreContent
+      Warn "Restored .ignore after project-file regeneration to avoid tracked file churn."
+    }
+  }
+  elseif (-not $Snapshot.IgnoreExists -and $Snapshot.IgnoreTracked -and (Test-Path -LiteralPath $Snapshot.IgnorePath -PathType Leaf)) {
+    Remove-Item -LiteralPath $Snapshot.IgnorePath -Force
+    Warn "Removed generated .ignore because it is tracked but did not exist before regeneration."
+  }
+}
+
 # ---- Main ----
-$manual = $Force -or $CleanSaved -or $CleanCache -or $NoRegen -or $NoBuild
+$script:ResolvedRepoRoot = Resolve-UnrealSyncRoot -ExplicitRepoRoot $RepoRoot
+Set-Location $script:ResolvedRepoRoot
+
+$manual = $Force -or $CleanGenerated -or $CleanSaved -or $CleanCache -or $NoRegen -or $NoBuild
 
 # If invoked from hook, only run on branch checkouts.
 if (-not $manual -and $Flag -ne 1) { 
@@ -719,23 +1147,32 @@ if (-not $manual) {
   }
 }
 
-$triggerFiles = @()
+$actionPlan = [pscustomobject]@{
+  BuildTriggers = @()
+  RegenTriggers = @()
+  ShouldBuild = $Force -and -not $NoBuild
+  ShouldRegen = $Force -and -not $NoRegen
+}
 if (-not $manual) {
-  $changed = Get-ChangedFiles $OldRev $NewRev
-  $triggerFiles = Get-RebuildTriggers $changed
-  if (-not $Force -and $triggerFiles.Count -eq 0) {
-    # No structural trigger => no-op, keep hook output clean.
+  $changedRecords = Get-ChangedFileRecords $OldRev $NewRev
+  $actionPlan = Get-UnrealSyncActionPlan $changedRecords
+  if (-not $actionPlan.ShouldBuild -and -not $actionPlan.ShouldRegen) {
+    # No UE C++/project trigger => no-op, keep hook output clean.
     exit 0
   }
 }
 
-$uprojectPath = Get-UProjectPath
-$projectName = Get-ProjectName $uprojectPath
+$projectContext = Get-ProjectContext -RepoRoot $script:ResolvedRepoRoot -UProjectPath $UProjectPath -WorkspacePath $WorkspacePath
+$uprojectPath = $projectContext.UProjectPath
+$projectName = $projectContext.ProjectName
+
+$shouldRunRegen = -not $NoRegen -and ($manual -or $actionPlan.ShouldRegen)
+$shouldRunBuild = -not $NoBuild -and ($manual -or $actionPlan.ShouldBuild)
 
 Info "UProject Path: $uprojectPath"
 if (-not $manual) {
-  Info "Checking for structural C++ changes between $OldRev and $NewRev..."
-  Show-RebuildTriggers $triggerFiles
+  Info "Checking UE sync actions between $OldRev and $NewRev..."
+  Show-UnrealSyncActionPlan $actionPlan
 }
 
 if (-not $manual) {
@@ -759,7 +1196,20 @@ if (-not $manual) {
   }
 
   if (-not $isNonInteractive) {
-    Info "Would you like to proceed with regenerating project files and building the editor? (y/n)"
+    $actionDescription = if ($shouldRunRegen -and $shouldRunBuild) {
+      "regenerating project files and building the editor"
+    }
+    elseif ($shouldRunRegen) {
+      "regenerating project files"
+    }
+    elseif ($shouldRunBuild) {
+      "building the editor"
+    }
+    else {
+      "the selected UE sync action"
+    }
+
+    Info "Would you like to proceed with $actionDescription? (y/n)"
     try {
       $response = Read-Host
     }
@@ -796,31 +1246,49 @@ else {
   }
 }
 
-Info "Cleaning generated folders..."
 if ($DryRun) {
   Info "DryRun enabled. Skipping cleanup/regeneration/build."
   exit 0
 }
 
-[void](Remove-IfExists -Path "Binaries" -NonInteractive:$isNonInteractive)
-[void](Remove-IfExists -Path "Intermediate" -NonInteractive:$isNonInteractive)
+$shouldCleanGeneratedFolders = $shouldRunRegen -or $CleanGenerated -or $CleanSaved -or $CleanCache
+if ($shouldCleanGeneratedFolders) {
+  Info "Cleaning generated folders..."
+  if ($shouldRunRegen -or $CleanGenerated) {
+    [void](Remove-IfExists -Path "Binaries" -NonInteractive:$isNonInteractive)
+    [void](Remove-IfExists -Path "Intermediate" -NonInteractive:$isNonInteractive)
+  }
+}
+else {
+  Info "Skipping generated folder cleanup for build-only sync."
+}
+
 if ($CleanCache) { [void](Remove-IfExists -Path "DerivedDataCache" -NonInteractive:$isNonInteractive) }
 if ($CleanSaved) { [void](Remove-IfExists -Path "Saved" -NonInteractive:$isNonInteractive) }
 
 $engineRoot = $null
-if (-not $NoBuild) {
+if ($shouldRunBuild) {
   $engineRoot = Resolve-EngineRootForBuild $WorkspacePath $uprojectPath
   Info "Engine (build): $engineRoot"
 }
 
-if (-not $NoRegen) {
-  Invoke-Regenerate-ProjectFiles $uprojectPath $engineRoot $WorkspacePath
+$artifactSnapshot = $null
+if ($shouldRunRegen) {
+  $artifactSnapshot = New-ProjectFileArtifactSnapshot -ProjectContext $projectContext -WorkspacePathOverride $WorkspacePath
+  try {
+    Invoke-Regenerate-ProjectFiles $uprojectPath $engineRoot $WorkspacePath
+  }
+  finally {
+    if ($artifactSnapshot) {
+      Restore-ProjectFileArtifactSnapshot -Snapshot $artifactSnapshot
+    }
+  }
 }
 else {
   Warn "Skipping project file regeneration..."
 }
 
-if (-not $NoBuild) {
+if ($shouldRunBuild) {
   Build-Editor $engineRoot $uprojectPath $projectName $Platform $Config
 }
 else {

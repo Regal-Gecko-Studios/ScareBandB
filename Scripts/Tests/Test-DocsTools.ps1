@@ -306,7 +306,7 @@ try {
   $helpToolset = New-StubToolset -Name "toolset-help"
   $helpResult = Invoke-DocsToolsCommand -ScratchRepoRoot $helpRepo -CliArgs @("help") -Toolset $helpToolset -SandboxRoot (New-ScratchPath "sandbox-help")
   Assert-Condition "case1 help exits cleanly" ($helpResult.ExitCode -eq 0) "exit code=0" "exit code=$($helpResult.ExitCode)"
-  Assert-TextContains "case1 help shows header" $helpResult.OutputText "ScareBandB docs automation."
+  Assert-TextContains "case1 help shows header" $helpResult.OutputText "UE project docs automation."
   Assert-TextContains "case1 help shows section alias" $helpResult.OutputText "new-section, create-section"
   Assert-TextContains "case1 help shows page alias" $helpResult.OutputText "new-page, create-page"
   Assert-TextContains "case1 help shows reorder" $helpResult.OutputText "reorder"
@@ -599,7 +599,7 @@ sidebar_position: 1
     -CliArgs @("install-bridge") `
     -Toolset $bridgeToolset `
     -SandboxRoot (New-ScratchPath "sandbox-install-bridge")
-  $bridgeInstallPath = Join-Path $installBridgeResult.SandboxUserProfile ".vscode\extensions\rim28.scarebandb-docs-tools-bridge-0.0.1"
+  $bridgeInstallPath = Join-Path $installBridgeResult.SandboxUserProfile ".vscode\extensions\ueproject.docs-tools-bridge-0.0.1"
   Assert-Condition "case4 install-bridge exits cleanly" ($installBridgeResult.ExitCode -eq 0) "exit code=0" "exit code=$($installBridgeResult.ExitCode)"
   Assert-Condition "case4 bridge folder created" (Test-Path -LiteralPath $bridgeInstallPath) "bridge extension copied"
   Assert-Condition "case4 bridge package copied" (Test-Path -LiteralPath (Join-Path $bridgeInstallPath "package.json")) "package.json copied"
@@ -615,7 +615,7 @@ sidebar_position: 1
     -Toolset $foregroundStartToolset `
     -SandboxRoot (New-ScratchPath "sandbox-start-foreground")
   $foregroundStartStubLog = Get-Content -LiteralPath $foregroundStartToolset.CommandLog -Raw
-  $foregroundStateFiles = @(Get-ChildItem -Path (Join-Path $foregroundStartResult.SandboxTemp "scarebandb-docs-tools") -Recurse -Filter docs-server.json -ErrorAction SilentlyContinue)
+  $foregroundStateFiles = @(Get-ChildItem -Path (Join-Path $foregroundStartResult.SandboxTemp "ueproject-docs-tools") -Recurse -Filter docs-server.json -ErrorAction SilentlyContinue)
   Assert-Condition "case5 start exits cleanly" ($foregroundStartResult.ExitCode -eq 0) "exit code=0" "exit code=$($foregroundStartResult.ExitCode)"
   Assert-TextContains "case5 output confirms foreground start" $foregroundStartResult.OutputText "Starting docs dev server in the current terminal."
   Assert-TextContains "case5 output includes requested port url" $foregroundStartResult.OutputText "http://localhost:3001/docs/"
@@ -632,7 +632,7 @@ sidebar_position: 1
     -Toolset $startStopToolset `
     -SandboxRoot $startStopSandbox `
     -ExtraEnv @{ STUB_NPM_START_MODE = "sleep" }
-  $serverStateFiles = @(Get-ChildItem -Path (Join-Path $startResult.SandboxTemp "scarebandb-docs-tools") -Recurse -Filter docs-server.json -ErrorAction SilentlyContinue)
+  $serverStateFiles = @(Get-ChildItem -Path (Join-Path $startResult.SandboxTemp "ueproject-docs-tools") -Recurse -Filter docs-server.json -ErrorAction SilentlyContinue)
   $serverState = Get-Content -LiteralPath $serverStateFiles[0].FullName -Raw | ConvertFrom-Json
   $startStubLog = Get-Content -LiteralPath $startStopToolset.CommandLog -Raw
   Assert-Condition "case5b start exits cleanly" ($startResult.ExitCode -eq 0) "exit code=0" "exit code=$($startResult.ExitCode)"
@@ -712,7 +712,7 @@ sidebar_position: 1
 '@
   $tocToolset = New-StubToolset -Name "toolset-toc" -CodeExtensions @(
     "yzhang.markdown-all-in-one",
-    "rim28.scarebandb-docs-tools-bridge"
+    "ueproject.docs-tools-bridge"
   )
   $tocResult = Invoke-DocsToolsCommand `
     -ScratchRepoRoot $tocRepo `
@@ -721,7 +721,7 @@ sidebar_position: 1
     -SandboxRoot (New-ScratchPath "sandbox-toc")
   $tocPagePath = Join-Path $tocRepo "Docs\GameDesign\Scare-Curve.md"
   $tocPageText = Get-Content -LiteralPath $tocPagePath -Raw
-  $tocRequestFiles = @(Get-ChildItem -Path (Join-Path $tocResult.SandboxTemp "scarebandb-docs-tools") -Recurse -Filter *.json -ErrorAction SilentlyContinue)
+  $tocRequestFiles = @(Get-ChildItem -Path (Join-Path $tocResult.SandboxTemp "ueproject-docs-tools") -Recurse -Filter *.json -ErrorAction SilentlyContinue)
   $stubLogText = Get-Content -LiteralPath $tocToolset.CommandLog -Raw
   Assert-Condition "case7 toc-ready new-page exits cleanly" ($tocResult.ExitCode -eq 0) "exit code=0" "exit code=$($tocResult.ExitCode)"
   Assert-TextContains "case7 output confirms queued toc" $tocResult.OutputText "TOC request queued through the VS Code bridge."

@@ -145,24 +145,8 @@ function Get-ProjectAliasBootstrapMarkers {
 function Get-ProjectAliasLegacyMarkers {
   @(
     [pscustomobject]@{
-      StartMarker = "# >>> cppCozyRPG shell aliases >>>"
-      EndMarker = "# <<< cppCozyRPG shell aliases <<<"
-    },
-    [pscustomobject]@{
-      StartMarker = "# >>> ghost_game shell aliases >>>"
-      EndMarker = "# <<< ghost_game shell aliases <<<"
-    },
-    [pscustomobject]@{
       StartMarker = "# >>> ue-sync aliases >>>"
       EndMarker = "# <<< ue-sync aliases <<<"
-    },
-    [pscustomobject]@{
-      StartMarker = "# >>> cppCozyRPG UnrealSync aliases >>>"
-      EndMarker = "# <<< cppCozyRPG UnrealSync aliases <<<"
-    },
-    [pscustomobject]@{
-      StartMarker = "# >>> ghost_game UnrealSync aliases >>>"
-      EndMarker = "# <<< ghost_game UnrealSync aliases <<<"
     },
     [pscustomobject]@{
       StartMarker = "# >>> ue-tools aliases >>>"
@@ -330,7 +314,7 @@ function Invoke-UETools {
         -RelativePath "Scripts\Unreal\UnrealSync.ps1" `
         -NotFoundMessagePrefix "UnrealSync script not found"
 
-      & $syncScript -Force @commandArgs
+      & $syncScript -RepoRoot $repoRoot -Force @commandArgs
       return
     }
     default {

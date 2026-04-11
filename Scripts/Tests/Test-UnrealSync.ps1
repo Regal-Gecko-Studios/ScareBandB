@@ -572,7 +572,7 @@ try {
   )
 
   Assert-CodeZero "UE Sync case 6 exit code" $res.Code
-  Assert-OutputContains "UE Sync case 6 detects structural triggers" $res.Output "Structural C++ changes detected"
+  Assert-OutputContains "UE Sync case 6 detects UE sync action plan" $res.Output "UE Sync action plan:"
   Assert-OutputContains "UE Sync case 6 non-interactive path" $res.Output "Non-interactive execution detected; proceeding without confirmation."
   Assert-OutputContains "UE Sync case 6 dry-run path" $res.Output "DryRun enabled. Skipping cleanup/regeneration/build."
 
@@ -585,7 +585,7 @@ try {
   )
 
   Assert-CodeZero "UE Sync case 7 exit code" $res.Code
-  Assert-OutputContains "UE Sync case 7 detects structural triggers" $res.Output "Structural C++ changes detected"
+  Assert-OutputContains "UE Sync case 7 detects UE sync action plan" $res.Output "UE Sync action plan:"
   Assert-OutputContains "UE Sync case 7 no-tty safe skip path" $res.Output "Interactive root command detected but this hook has no terminal access. Skipping UE Sync to avoid an unconfirmed rebuild."
   Assert-OutputNotContains "UE Sync case 7 does not emit explicit user-decline message" $res.Output "User chose not to proceed. Exiting."
   Assert-OutputNotContains "UE Sync case 7 does not force non-interactive path" $res.Output "Non-interactive execution detected; proceeding without confirmation."
@@ -600,7 +600,7 @@ try {
   )
 
   Assert-CodeZero "UE Sync case 8 exit code" $res.Code
-  Assert-OutputContains "UE Sync case 8 detects structural triggers" $res.Output "Structural C++ changes detected"
+  Assert-OutputContains "UE Sync case 8 detects UE sync action plan" $res.Output "UE Sync action plan:"
   Assert-OutputNotContains "UE Sync case 8 does not emit explicit user-decline message" $res.Output "User chose not to proceed. Exiting."
   Assert-OutputNotContains "UE Sync case 8 does not force non-interactive path" $res.Output "Non-interactive execution detected; proceeding without confirmation."
   Assert-Condition `
@@ -648,6 +648,7 @@ try {
     $fs = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
     $res = Invoke-UnrealSyncCapture -Args @(
       "-Force",
+      "-CleanGenerated",
       "-NoRegen",
       "-NoBuild",
       "-NonInteractive"

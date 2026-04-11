@@ -24,6 +24,7 @@ $logPath = Join-Path $resultsDir "UnrealSync-Regen-$stamp.log"
 $script:PassCount = 0
 $script:FailCount = 0
 $script:TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("ue sync regen tests " + [Guid]::NewGuid().ToString("N"))
+$script:TestEngineAssociation = "5.4"
 New-Item -ItemType Directory -Force -Path $script:TempRoot | Out-Null
 
 function Write-Log {
@@ -143,6 +144,88 @@ function New-UProjectFile([string]$CaseDir, [string]$EngineAssociation) {
   return $uprojectPath
 }
 
+function New-ActionPlanUProjectFile([string]$RepoDir) {
+  $uprojectPath = Join-Path $RepoDir "ActionPlan.uproject"
+  $content = @'
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.4",
+  "Category": "",
+  "Description": "",
+  "Modules": [
+    {
+      "Name": "ActionPlan",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ]
+}
+'@
+  Write-TextFileLf -Path $uprojectPath -Content $content
+  return $uprojectPath
+}
+
+function New-FakeUVSWithArtifactMutation([string]$Path, [string]$WorkspacePath, [string]$IgnorePath) {
+  $scriptPath = [System.IO.Path]::ChangeExtension($Path, ".ps1")
+  $escapedWorkspacePath = $WorkspacePath.Replace("'", "''")
+  $escapedIgnorePath = $IgnorePath.Replace("'", "''")
+  $scriptText = @"
+`$workspacePath = '$escapedWorkspacePath'
+`$ignorePath = '$escapedIgnorePath'
+@'
+{
+  "folders": [
+    {
+      "name": "Generated Project",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "terminal.integrated.env.windows": {
+      "PATH": "generated"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "generated.extension"
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Generated Task",
+        "type": "shell",
+        "command": "echo generated"
+      }
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Generated Launch",
+        "type": "cppvsdbg",
+        "request": "launch",
+        "program": "generated.exe"
+      }
+    ]
+  }
+}
+'@ | Set-Content -LiteralPath `$workspacePath -Encoding UTF8
+'generated ignore' | Set-Content -LiteralPath `$ignorePath -Encoding UTF8
+exit 0
+"@
+  Write-TextFileLf -Path $scriptPath -Content $scriptText
+
+  $batchText = @"
+@echo off
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$scriptPath"
+exit /b %ERRORLEVEL%
+"@
+  Write-TextFileLf -Path $Path -Content $batchText
+}
+
 function New-FakeUVS([string]$Path, [int]$ExitCode) {
   $scriptText = @"
 @echo off
@@ -191,6 +274,45 @@ if not "%UE_SYNC_TEST_FALLBACK_CAPTURE%"=="" (
 exit /b $ExitCode
 "@
   Write-TextFileLf -Path (Join-Path $batchDir "Build.bat") -Content $scriptText
+}
+
+function New-ActionPlanRepo([string]$Name) {
+  $repoDir = New-CaseDir $Name
+  & git -C $repoDir init | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "git init failed for action-plan repo: $repoDir" }
+  & git -C $repoDir config user.email "ue-sync-test@example.invalid" | Out-Null
+  & git -C $repoDir config user.name "UE Sync Test" | Out-Null
+
+  [void](New-ActionPlanUProjectFile -RepoDir $repoDir)
+  $sourceDir = Join-Path $repoDir "Source\ActionPlan"
+  New-Item -ItemType Directory -Force -Path $sourceDir | Out-Null
+  Write-TextFileLf -Path (Join-Path $sourceDir "ActionPlan.Build.cs") -Content @'
+using UnrealBuildTool;
+
+public class ActionPlan : ModuleRules
+{
+  public ActionPlan(ReadOnlyTargetRules Target) : base(Target)
+  {
+    PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+  }
+}
+'@
+  Write-TextFileLf -Path (Join-Path $sourceDir "ActionPlan.cpp") -Content @'
+#include "ActionPlan.h"
+'@
+  Write-TextFileLf -Path (Join-Path $sourceDir "ActionPlan.h") -Content @'
+#pragma once
+'@
+
+  & git -C $repoDir add . | Out-Null
+  & git -C $repoDir commit -m "test: initial action plan repo" | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "initial action-plan commit failed in: $repoDir" }
+  $base = ((git -C $repoDir rev-parse HEAD 2>$null) | Select-Object -First 1).Trim()
+
+  return [pscustomobject]@{
+    RepoDir = $repoDir
+    Base = $base
+  }
 }
 
 function Invoke-UnrealSyncAt {
@@ -294,7 +416,7 @@ try {
 
   Step "Case 1: UVS success path"
   $case1 = New-CaseDir "case 1 uvs success path"
-  $uproject1 = New-UProjectFile $case1 "5.7"
+  $uproject1 = New-UProjectFile $case1 $script:TestEngineAssociation
   $tools1 = Join-Path $case1 "Fake Tools"
   New-Item -ItemType Directory -Force -Path $tools1 | Out-Null
   $uvs1 = Join-Path $tools1 "UnrealVersionSelector.cmd"
@@ -324,7 +446,7 @@ try {
 
   Step "Case 2: UVS failure falls back successfully via Build.bat"
   $case2 = New-CaseDir "case 2 uvs fail fallback build bat"
-  $uproject2 = New-UProjectFile $case2 "5.7"
+  $uproject2 = New-UProjectFile $case2 $script:TestEngineAssociation
   $tools2 = Join-Path $case2 "Fake Tools"
   New-Item -ItemType Directory -Force -Path $tools2 | Out-Null
   $uvs2 = Join-Path $tools2 "UnrealVersionSelector.cmd"
@@ -384,7 +506,7 @@ try {
 
   Step "Case 4: Spaced workspace path resolves engine root for fallback"
   $case4 = New-CaseDir "case 4 workspace path with spaces"
-  $uproject4 = New-UProjectFile $case4 "5.7"
+  $uproject4 = New-UProjectFile $case4 $script:TestEngineAssociation
   $tools4 = Join-Path $case4 "Fake Tools"
   New-Item -ItemType Directory -Force -Path $tools4 | Out-Null
   $uvs4 = Join-Path $tools4 "UnrealVersionSelector.cmd"
@@ -429,7 +551,7 @@ try {
 
   Step "Case 5: UVS retry succeeds on second attempt and skips fallback"
   $case5 = New-CaseDir "case 5 uvs retry once then success"
-  [void](New-UProjectFile $case5 "5.7")
+  [void](New-UProjectFile $case5 $script:TestEngineAssociation)
   $tools5 = Join-Path $case5 "Fake Tools"
   New-Item -ItemType Directory -Force -Path $tools5 | Out-Null
   $uvs5 = Join-Path $tools5 "UnrealVersionSelector.cmd"
@@ -462,7 +584,7 @@ try {
 
   Step "Case 6: Seeded stale LASTEXITCODE does not leak into UVS failure reporting"
   $case6 = New-CaseDir "case 6 seeded stale last exit code"
-  [void](New-UProjectFile $case6 "5.7")
+  [void](New-UProjectFile $case6 $script:TestEngineAssociation)
   $tools6 = Join-Path $case6 "Fake Tools"
   New-Item -ItemType Directory -Force -Path $tools6 | Out-Null
   $uvs6 = Join-Path $tools6 "UnrealVersionSelector.cmd"
@@ -486,6 +608,167 @@ try {
   Assert-OutputNotContains "case 6 stale seeded code not reported as UVS exit" $res.Output "UVS failed (exit $staleSeedCode)"
   Assert-OutputContains "case 6 fallback still invoked" $res.Output "Regenerating project files (fallback via Build.bat)..."
   Assert-Condition "case 6 fallback capture exists" (Test-Path -LiteralPath $fallbackCapture6) "fallback capture created" "fallback capture missing"
+
+  Step "Case 7: Project-file regeneration preserves VS Code workspace customization and .ignore"
+  $case7 = New-CaseDir "case 7 preserve workspace artifacts"
+  [void](New-UProjectFile $case7 $script:TestEngineAssociation)
+  $workspace7 = Join-Path $case7 "Space Project.code-workspace"
+  $ignore7 = Join-Path $case7 ".ignore"
+  $initialWorkspace7 = @'
+{
+  "folders": [
+    {
+      "name": "User Project",
+      "path": "."
+    },
+    {
+      "name": "User Extra Folder",
+      "path": "../UserExtra"
+    }
+  ],
+  "settings": {
+    "editor.formatOnSave": true,
+    "terminal.integrated.env.windows": {
+      "USER_ONLY": "1"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "user.extension"
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "User Task",
+        "type": "shell",
+        "command": "echo user"
+      }
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "User Launch",
+        "type": "node",
+        "request": "launch",
+        "program": "user.js"
+      }
+    ]
+  }
+}
+'@
+  Write-TextFileLf -Path $workspace7 -Content $initialWorkspace7
+  Write-TextFileLf -Path $ignore7 -Content "original ignore`n"
+  $uvs7 = Join-Path $case7 "UnrealVersionSelector.cmd"
+  New-FakeUVSWithArtifactMutation -Path $uvs7 -WorkspacePath $workspace7 -IgnorePath $ignore7
+
+  $res = Invoke-UnrealSyncAt -WorkingDir $case7 -Args @("-Force", "-NoBuild", "-NonInteractive") -Environment @{
+    UE_SYNC_UVS_PATH              = $uvs7
+    UE_SYNC_TEST_FALLBACK_CAPTURE = $null
+    UE_ENGINE_DIR                 = $null
+    UE_ENGINE_ROOT                = $null
+    UNREAL_ENGINE_DIR             = $null
+    UE_ENGINE_DISABLE_COMMON_INSTALL_SCAN = $null
+  }
+
+  Assert-Code "case 7 exit code" $res.Code 0
+  Assert-OutputContains "case 7 workspace preservation logged" $res.Output "Preserved user VS Code workspace settings after project-file regeneration"
+  Assert-OutputContains "case 7 ignore restoration logged" $res.Output "Restored .ignore after project-file regeneration"
+  $workspace7Json = Get-Content -LiteralPath $workspace7 -Raw | ConvertFrom-Json
+  $ignore7Text = Get-Content -LiteralPath $ignore7 -Raw
+  Assert-Condition "case 7 generated workspace folder retained" (
+    @($workspace7Json.folders | Where-Object { $_.name -eq "Generated Project" }).Count -eq 1
+  ) "generated folder retained" "generated folder missing"
+  Assert-Condition "case 7 user extra workspace folder retained" (
+    @($workspace7Json.folders | Where-Object { $_.name -eq "User Extra Folder" -and $_.path -eq "../UserExtra" }).Count -eq 1
+  ) "user extra folder retained" "user extra folder missing"
+  Assert-Condition "case 7 user setting retained" ([bool]$workspace7Json.settings.'editor.formatOnSave') "editor.formatOnSave retained" "editor.formatOnSave missing"
+  Assert-Condition "case 7 user terminal env retained" (
+    [string]$workspace7Json.settings.'terminal.integrated.env.windows'.USER_ONLY -eq "1"
+  ) "USER_ONLY env retained" "USER_ONLY env missing"
+  Assert-Condition "case 7 extension recommendations merged" (
+    @($workspace7Json.extensions.recommendations) -contains "generated.extension" -and
+    @($workspace7Json.extensions.recommendations) -contains "user.extension"
+  ) "extension recommendations merged" "extension recommendations were not merged"
+  Assert-Condition "case 7 user task retained" (
+    @($workspace7Json.tasks.tasks | Where-Object { $_.label -eq "User Task" }).Count -eq 1
+  ) "user task retained" "user task missing"
+  Assert-Condition "case 7 generated task retained" (
+    @($workspace7Json.tasks.tasks | Where-Object { $_.label -eq "Generated Task" }).Count -eq 1
+  ) "generated task retained" "generated task missing"
+  Assert-Condition "case 7 user launch retained" (
+    @($workspace7Json.launch.configurations | Where-Object { $_.name -eq "User Launch" }).Count -eq 1
+  ) "user launch retained" "user launch missing"
+  Assert-Condition "case 7 generated launch retained" (
+    @($workspace7Json.launch.configurations | Where-Object { $_.name -eq "Generated Launch" }).Count -eq 1
+  ) "generated launch retained" "generated launch missing"
+  Assert-Condition "case 7 ignore restored" ($ignore7Text -eq "original ignore`n") "ignore restored" "ignore content=$ignore7Text"
+
+  Step "Case 8: Modified C++ source triggers build only"
+  $case8Repo = New-ActionPlanRepo -Name "case 8 modified cpp build only"
+  $cpp8 = Join-Path $case8Repo.RepoDir "Source\ActionPlan\ActionPlan.cpp"
+  Add-Content -LiteralPath $cpp8 -Value "// build-only change" -Encoding UTF8
+  & git -C $case8Repo.RepoDir add . | Out-Null
+  & git -C $case8Repo.RepoDir commit -m "test: modify cpp" | Out-Null
+  $head8 = ((git -C $case8Repo.RepoDir rev-parse HEAD 2>$null) | Select-Object -First 1).Trim()
+  $res = Invoke-UnrealSyncAt -WorkingDir $case8Repo.RepoDir -Args @(
+    "-RepoRoot", $case8Repo.RepoDir,
+    "-OldRev", $case8Repo.Base,
+    "-NewRev", $head8,
+    "-Flag", "1",
+    "-NonInteractive",
+    "-DryRun"
+  ) -Environment @{}
+
+  Assert-Code "case 8 exit code" $res.Code 0
+  Assert-OutputContains "case 8 build-only action plan" $res.Output "UE Sync action plan: build the editor."
+  Assert-OutputContains "case 8 build trigger listed" $res.Output "Build triggers:"
+  Assert-OutputNotContains "case 8 no regen trigger heading" $res.Output "Project-file regeneration triggers:"
+
+  Step "Case 9: Added C++ source triggers project-file regen and build"
+  $case9Repo = New-ActionPlanRepo -Name "case 9 added cpp regen and build"
+  $newCpp9 = Join-Path $case9Repo.RepoDir "Source\ActionPlan\NewFile.cpp"
+  Write-TextFileLf -Path $newCpp9 -Content '#include "ActionPlan.h"'
+  & git -C $case9Repo.RepoDir add . | Out-Null
+  & git -C $case9Repo.RepoDir commit -m "test: add cpp" | Out-Null
+  $head9 = ((git -C $case9Repo.RepoDir rev-parse HEAD 2>$null) | Select-Object -First 1).Trim()
+  $res = Invoke-UnrealSyncAt -WorkingDir $case9Repo.RepoDir -Args @(
+    "-RepoRoot", $case9Repo.RepoDir,
+    "-OldRev", $case9Repo.Base,
+    "-NewRev", $head9,
+    "-Flag", "1",
+    "-NonInteractive",
+    "-DryRun"
+  ) -Environment @{}
+
+  Assert-Code "case 9 exit code" $res.Code 0
+  Assert-OutputContains "case 9 regen and build action plan" $res.Output "UE Sync action plan: regenerate project files and build the editor."
+  Assert-OutputContains "case 9 regen trigger listed" $res.Output "Project-file regeneration triggers:"
+  Assert-OutputContains "case 9 build trigger listed" $res.Output "Build triggers:"
+
+  Step "Case 10: Build.cs changes trigger project-file regen and build"
+  $case10Repo = New-ActionPlanRepo -Name "case 10 build cs regen and build"
+  $buildCs10 = Join-Path $case10Repo.RepoDir "Source\ActionPlan\ActionPlan.Build.cs"
+  Add-Content -LiteralPath $buildCs10 -Value "// module rules changed" -Encoding UTF8
+  & git -C $case10Repo.RepoDir add . | Out-Null
+  & git -C $case10Repo.RepoDir commit -m "test: modify module rules" | Out-Null
+  $head10 = ((git -C $case10Repo.RepoDir rev-parse HEAD 2>$null) | Select-Object -First 1).Trim()
+  $res = Invoke-UnrealSyncAt -WorkingDir $case10Repo.RepoDir -Args @(
+    "-RepoRoot", $case10Repo.RepoDir,
+    "-OldRev", $case10Repo.Base,
+    "-NewRev", $head10,
+    "-Flag", "1",
+    "-NonInteractive",
+    "-DryRun"
+  ) -Environment @{}
+
+  Assert-Code "case 10 exit code" $res.Code 0
+  Assert-OutputContains "case 10 regen and build action plan" $res.Output "UE Sync action plan: regenerate project files and build the editor."
+  Assert-OutputContains "case 10 regen trigger listed" $res.Output "Project-file regeneration triggers:"
+  Assert-OutputContains "case 10 build trigger listed" $res.Output "Build triggers:"
 
   Step "Summary"
   Write-Log ("PASS={0} FAIL={1}" -f $script:PassCount, $script:FailCount) Cyan
